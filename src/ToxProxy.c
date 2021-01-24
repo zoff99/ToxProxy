@@ -812,7 +812,10 @@ void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t 
         fclose(f);
     }
 
-    ping_push_service();
+    if (ping_push_service() == 1)
+    {
+        ping_push_service();
+    }
 
     free(raw_message_data);
     free(message);
@@ -865,7 +868,10 @@ void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, u
         fclose(f);
     }
 
-    ping_push_service();
+    if (ping_push_service() == 1)
+    {
+        ping_push_service();
+    }
 
     free(msgPath);
 }
@@ -1563,6 +1569,10 @@ void send_sync_msgs(Tox *tox)
     closedir(dfd);
 }
 
+/*
+ * return: 0 --> ok
+ *         1 --> error
+ */
 int ping_push_service()
 {
     toxProxyLog(9, "ping_push_service");
@@ -1583,13 +1593,13 @@ int ping_push_service()
 
     if ((he = gethostbyname(PUSH__DST_HOST)) == NULL)
     {
-        toxProxyLog(9, "gethostbyname");
+        toxProxyLog(9, "ping_push_service:gethostbyname");
         return 1;
     }
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
     {
-        toxProxyLog(9, "socket");
+        toxProxyLog(9, "ping_push_service:socket");
         return 1;
     }
 
@@ -1600,30 +1610,46 @@ int ping_push_service()
 
     if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
     {
-        toxProxyLog(9, "connect");
+        toxProxyLog(9, "ping_push_service:connect");
         close(sockfd);
         return 1;
     }
 
     if (send(sockfd, NOTIFICATION__device_token, strlen(NOTIFICATION__device_token), 0) == -1)
     {
-        toxProxyLog(9, "send");
+        toxProxyLog(9, "ping_push_service:send");
         close(sockfd);
         return 1;
     }
 
     if ((numbytes = recv(sockfd, buf, PUSH__MAXDATASIZE, 0)) == -1)
     {
-        toxProxyLog(9, "recv");
+        toxProxyLog(9, "ping_push_service:recv");
         close(sockfd);
         return 1;
     }
 
     close(sockfd);
 
-    toxProxyLog(9, "ping_push_service:PING sent");
+    if (numbytes > 2)
+    {
+        toxProxyLog(9, "ping_push_service:PING sent:result=%c%c %d %d", (char)buf[0], (char)buf[1], (int)buf[0], (int)buf[1]);
 
-    return 0;
+        // '79' '75' -> 'OK'
+        if (((int)buf[0] == 79) && ((int)buf[1] == 75))
+        {
+            return 0;
+        }
+        else
+        {
+            return 1;
+        }
+    }
+    else
+    {
+        toxProxyLog(9, "ping_push_service:PING sent:result=ERR02");
+        return 1;
+    }
 }
 
 int main(int argc, char *argv[])
