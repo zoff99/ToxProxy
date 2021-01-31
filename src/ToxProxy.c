@@ -91,6 +91,16 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 
 static char *NOTIFICATION__device_token = NULL;
 
+#define NOTIFICATION_METHOD_NONE 0
+#define NOTIFICATION_METHOD_TCP  1
+#define NOTIFICATION_METHOD_HTTP 2
+
+#define NOTIFICATION_METHOD NOTIFICATION_METHOD_HTTP
+
+#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
+#include <curl/curl.h>
+#endif
+
 typedef struct DHT_node {
     const char *ip;
     uint16_t port;
@@ -1265,7 +1275,7 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                                         sprintf(run_cmd, "rm %s/%s*", friendDir, delete_file_glob);
                                         toxProxyLog(2, "is_answer_to_synced_message: running cmd: %s", run_cmd);
                                         int cmd_res = system(run_cmd);
-                                        cmd_res = 0;
+                                        if (cmd_res){}
                                         toxProxyLog(2, "is_answer_to_synced_message: cmd DONE");
                                         free(run_cmd);
                                         free(delete_file_glob);
@@ -1312,7 +1322,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     bool res = tox_messagev2_wrap(0, TOX_FILE_KIND_MESSAGEV2_ANSWER,
                                   0, NULL, ts_sec, 0,
                                   raw_message_data, (uint8_t *)msgid);
-    res = true;
+    if (res){}
 
     // check if this is an answer for a message we synced -> then just delete this message and not send it again
     // otherwise save the answer message
@@ -1569,6 +1579,45 @@ void send_sync_msgs(Tox *tox)
     closedir(dfd);
 }
 
+
+struct string {
+    char *ptr;
+    size_t len;
+};
+
+static void init_string(struct string *s)
+{
+    s->len = 0;
+    s->ptr = calloc(1, s->len + 1);
+
+    if (s->ptr == NULL)
+    {
+        toxProxyLog(9, "malloc() failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    s->ptr[0] = '\0';
+}
+
+static size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s)
+{
+    size_t new_len = s->len + size*nmemb;
+    s->ptr = realloc(s->ptr, new_len+1);
+
+    if (s->ptr == NULL)
+    {
+        toxProxyLog(9, "realloc() failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    memcpy(s->ptr+s->len, ptr, size*nmemb);
+    s->ptr[new_len] = '\0';
+    s->len = new_len;
+
+    return size*nmemb;
+}
+
+
 /*
  * return: 0 --> ok
  *         1 --> error
@@ -1577,77 +1626,147 @@ int ping_push_service()
 {
     toxProxyLog(9, "ping_push_service");
 
+    if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_NONE)
+    {
+        toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD NONE");
+        return 1;
+    }
+
     if (!NOTIFICATION__device_token)
     {
         toxProxyLog(9, "ping_push_service: No NOTIFICATION__device_token");
         return 1;
     }
 
-    int sockfd = 0;
-    int numbytes = 0;
-    char buf[PUSH__MAXDATASIZE + 1];
-    struct hostent *he = NULL;
-    struct sockaddr_in their_addr;
 
-    memset(buf, 0, (PUSH__MAXDATASIZE + 1));
-
-    if ((he = gethostbyname(PUSH__DST_HOST)) == NULL)
+    if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_TCP)
     {
-        toxProxyLog(9, "ping_push_service:gethostbyname");
-        return 1;
-    }
+        toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD TCP");
+        int sockfd = 0;
+        int numbytes = 0;
+        char buf[PUSH__MAXDATASIZE + 1];
+        struct hostent *he = NULL;
+        struct sockaddr_in their_addr;
 
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-    {
-        toxProxyLog(9, "ping_push_service:socket");
-        return 1;
-    }
+        memset(buf, 0, (PUSH__MAXDATASIZE + 1));
 
-    their_addr.sin_family = AF_INET;
-    their_addr.sin_port = htons(PUSH__DST_PORT);
-    their_addr.sin_addr = *((struct in_addr *)he->h_addr);
-    bzero(&(their_addr.sin_zero), 8);
-
-    if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
-    {
-        toxProxyLog(9, "ping_push_service:connect");
-        close(sockfd);
-        return 1;
-    }
-
-    if (send(sockfd, NOTIFICATION__device_token, strlen(NOTIFICATION__device_token), 0) == -1)
-    {
-        toxProxyLog(9, "ping_push_service:send");
-        close(sockfd);
-        return 1;
-    }
-
-    if ((numbytes = recv(sockfd, buf, PUSH__MAXDATASIZE, 0)) == -1)
-    {
-        toxProxyLog(9, "ping_push_service:recv");
-        close(sockfd);
-        return 1;
-    }
-
-    close(sockfd);
-
-    if (numbytes > 2)
-    {
-        toxProxyLog(9, "ping_push_service:PING sent:result=%c%c %d %d", (char)buf[0], (char)buf[1], (int)buf[0], (int)buf[1]);
-
-        // '79' '75' -> 'OK'
-        if (((int)buf[0] == 79) && ((int)buf[1] == 75))
+        if ((he = gethostbyname(PUSH__DST_HOST)) == NULL)
         {
-            return 0;
+            toxProxyLog(9, "ping_push_service:gethostbyname");
+            return 1;
+        }
+
+        if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+        {
+            toxProxyLog(9, "ping_push_service:socket");
+            return 1;
+        }
+
+        their_addr.sin_family = AF_INET;
+        their_addr.sin_port = htons(PUSH__DST_PORT);
+        their_addr.sin_addr = *((struct in_addr *)he->h_addr);
+        bzero(&(their_addr.sin_zero), 8);
+
+        if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
+        {
+            toxProxyLog(9, "ping_push_service:connect");
+            close(sockfd);
+            return 1;
+        }
+
+        if (send(sockfd, NOTIFICATION__device_token, strlen(NOTIFICATION__device_token), 0) == -1)
+        {
+            toxProxyLog(9, "ping_push_service:send");
+            close(sockfd);
+            return 1;
+        }
+
+        if ((numbytes = recv(sockfd, buf, PUSH__MAXDATASIZE, 0)) == -1)
+        {
+            toxProxyLog(9, "ping_push_service:recv");
+            close(sockfd);
+            return 1;
+        }
+
+        close(sockfd);
+
+        if (numbytes > 2)
+        {
+            toxProxyLog(9, "ping_push_service:PING sent:result=%c%c %d %d", (char)buf[0], (char)buf[1], (int)buf[0], (int)buf[1]);
+
+            // '79' '75' -> 'OK'
+            if (((int)buf[0] == 79) && ((int)buf[1] == 75))
+            {
+                toxProxyLog(9, "ping_push_service:PING sent:result=OK.");
+                return 0;
+            }
+            else
+            {
+                toxProxyLog(9, "ping_push_service:PING sent:result=ERR01.");
+                return 1;
+            }
         }
         else
         {
+            toxProxyLog(9, "ping_push_service:PING sent:result=ERR02.");
             return 1;
         }
     }
+    else if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP)
+    {
+        toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD HTTP");
+        int result = 1;
+        CURL *curl = NULL;
+        CURLcode res = 0;
+
+        size_t max_buf_len = strlen(HTTP_PUSH__DST_URL) + strlen(NOTIFICATION__device_token);
+
+        char buf[max_buf_len + 1];
+        memset(buf, 0, max_buf_len + 1);
+        snprintf(buf, max_buf_len, "%s%s", HTTP_PUSH__DST_URL, NOTIFICATION__device_token);
+
+        curl_global_init(CURL_GLOBAL_ALL);
+        curl = curl_easy_init();
+
+        if (curl)
+        {
+            struct string s;
+            init_string(&s);
+
+            curl_easy_setopt(curl, CURLOPT_URL, buf);
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+
+            res = curl_easy_perform(curl);
+
+            if (res != CURLE_OK)
+            {
+                toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
+            }
+            else
+            {
+                char *found = strstr((const char *)s.ptr, (const char *)"OK");
+
+                if (found == NULL)
+                {
+                    toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                }
+                else
+                {
+                    result = 0;
+                }
+                free(s.ptr);
+                s.ptr = NULL;
+            }
+
+            curl_easy_cleanup(curl);
+        }
+
+        curl_global_cleanup();
+        return result;
+    }
     else
     {
-        toxProxyLog(9, "ping_push_service:PING sent:result=ERR02");
         return 1;
     }
 }

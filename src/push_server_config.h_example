@@ -5,6 +5,6 @@
 #define PUSH__DST_HOST "127.0.0.1"
 #define PUSH__MAXDATASIZE 200
 
-static const char PUSH__device_token[] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+#define HTTP_PUSH__DST_URL "https://example.com/notify"
 
 #endif // C_PUSH_SERVER_CONFIG_H
