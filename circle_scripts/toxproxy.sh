@@ -245,6 +245,7 @@ $_INST_/lib/libavutil.a \
 $_INST_/lib/libsodium.a \
 -lm \
 -ldl \
+-lcurl \
 -lpthread \
 -o ToxProxy
 
