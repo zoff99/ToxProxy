@@ -2,8 +2,8 @@
  ============================================================================
  Name        : ToxProxy.c
  Authors     : Thomas Käfer, Zoff
- Version     : 0.1
- Copyright   : 2019
+ Version     : 0.2
+ Copyright   : 2019 - 2021
 
 Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und richtig angezeigt.
 
@@ -151,6 +151,10 @@ uint32_t tox_public_key_hex_size = 0; //initialized in main
 uint32_t tox_address_hex_size = 0; //initialized in main
 int tox_loop_running = 1;
 bool masterIsOnline = false;
+
+pthread_t notification_thread;
+int notification_thread_stop = 1;
+int need_send_notification = 0;
 
 int ping_push_service();
 
@@ -1715,60 +1719,88 @@ int ping_push_service()
     else if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP)
     {
         toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD HTTP");
-        int result = 1;
-        CURL *curl = NULL;
-        CURLcode res = 0;
-
-        size_t max_buf_len = strlen(HTTP_PUSH__DST_URL) + strlen(NOTIFICATION__device_token);
-
-        char buf[max_buf_len + 1];
-        memset(buf, 0, max_buf_len + 1);
-        snprintf(buf, max_buf_len, "%s%s", HTTP_PUSH__DST_URL, NOTIFICATION__device_token);
-
-        curl_global_init(CURL_GLOBAL_ALL);
-        curl = curl_easy_init();
-
-        if (curl)
-        {
-            struct string s;
-            init_string(&s);
-
-            curl_easy_setopt(curl, CURLOPT_URL, buf);
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
-
-            res = curl_easy_perform(curl);
-
-            if (res != CURLE_OK)
-            {
-                toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
-            }
-            else
-            {
-                char *found = strstr((const char *)s.ptr, (const char *)"OK");
-
-                if (found == NULL)
-                {
-                    toxProxyLog(9, "server_answer=%s\n", s.ptr);
-                }
-                else
-                {
-                    result = 0;
-                }
-                free(s.ptr);
-                s.ptr = NULL;
-            }
-
-            curl_easy_cleanup(curl);
-        }
-
-        curl_global_cleanup();
-        return result;
+        need_send_notification = 1;
     }
     else
     {
         return 1;
     }
+}
+
+static void *notification_thread_func(void *data)
+{
+    while (notification_thread_stop == 0)
+    {
+        if (need_send_notification == 1)
+        {
+            if (!NOTIFICATION__device_token)
+            {
+                // no notification token
+            }
+            else
+            {
+                toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD HTTP");
+                int result = 1;
+                CURL *curl = NULL;
+                CURLcode res = 0;
+
+                size_t max_buf_len = strlen(HTTP_PUSH__DST_URL) + strlen(NOTIFICATION__device_token) + 1;
+
+                char buf[max_buf_len + 1];
+                memset(buf, 0, max_buf_len + 1);
+                snprintf(buf, max_buf_len, "%s%s", HTTP_PUSH__DST_URL, NOTIFICATION__device_token);
+
+                curl = curl_easy_init();
+
+                if (curl)
+                {
+                    struct string s;
+                    init_string(&s);
+
+                    curl_easy_setopt(curl, CURLOPT_URL, buf);
+                    // toxProxyLog(9, "get_url=%s\n", buf);
+                    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+                    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+
+                    res = curl_easy_perform(curl);
+
+                    if (res != CURLE_OK)
+                    {
+                        toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
+                    }
+                    else
+                    {
+                        // toxProxyLog(9, "server_answer=%s\n", s.ptr);
+
+                        char *found = strstr((const char *)s.ptr, (const char *)"OK");
+
+                        if (found == NULL)
+                        {
+                            toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                        }
+                        else
+                        {
+                            toxProxyLog(9, "server_answer:OK:%s\n", s.ptr);
+                            result = 0;
+                        }
+                        free(s.ptr);
+                        s.ptr = NULL;
+                    }
+
+                    curl_easy_cleanup(curl);
+                }
+
+                if (result == 0)
+                {
+                    need_send_notification = 0;
+                }
+            }
+        }
+        usleep_usec(1000 * 400); // sleep 400 ms
+    }
+
+    toxProxyLog(2, "Notification:Clean thread exit!\n");
+    pthread_exit(0);
 }
 
 int main(int argc, char *argv[])
@@ -1784,6 +1816,22 @@ int main(int argc, char *argv[])
     // ---- test ASAN ----
 
     on_start();
+
+#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
+    curl_global_init(CURL_GLOBAL_ALL);
+    need_send_notification = 0;
+    notification_thread_stop = 0;
+
+    if (pthread_create(&notification_thread, NULL, notification_thread_func, (void *)NULL) != 0)
+    {
+        toxProxyLog(0, "Notification Thread create failed\n");
+    }
+    else
+    {
+        pthread_setname_np(notification_thread, "t_notif");
+        toxProxyLog(2, "Notification Thread successfully created\n");
+    }
+#endif
 
     Tox *tox = openTox();
 
@@ -1961,6 +2009,13 @@ int main(int argc, char *argv[])
     tox_utils_kill(tox);
 #else
     tox_kill(tox);
+#endif
+
+#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
+    notification_thread_stop = 1;
+    pthread_join(notification_thread, NULL);
+
+    curl_global_cleanup();
 #endif
 
     if (logfile) {
