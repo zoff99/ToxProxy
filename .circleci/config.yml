@@ -28,6 +28,7 @@ jobs:
             zip grep file ca-certificates autotools-dev autoconf automake
             git bc wget rsync cmake make pkg-config libtool
             ssh gzip tar unzip
+            libcurl4-gnutls-dev
             coreutils
 
       - checkout
