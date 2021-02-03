@@ -1720,6 +1720,7 @@ int ping_push_service()
     {
         toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD HTTP");
         need_send_notification = 1;
+        return 1;
     }
     else
     {
