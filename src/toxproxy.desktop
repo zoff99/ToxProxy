@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ToxProxy
+StartupWMClass=toxproxy
+TryExec=toxproxy
+Exec=toxproxy
+Icon=toxproxy
+Categories=InstantMessaging;Network;
+Terminal=true
