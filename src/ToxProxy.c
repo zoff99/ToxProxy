@@ -2,7 +2,6 @@
  ============================================================================
  Name        : ToxProxy.c
  Authors     : Thomas Käfer, Zoff
- Version     : 0.2
  Copyright   : 2019 - 2021
 
 Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und richtig angezeigt.
@@ -24,6 +23,15 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
  */
 
 #define _GNU_SOURCE
+
+// ----------- version -----------
+// ----------- version -----------
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 99
+#define VERSION_PATCH 3
+static const char global_version_string[] = "0.99.3";
+// ----------- version -----------
+// ----------- version -----------
 
 // define this to use savedata file instead of included in sqlite
 #define USE_SEPARATE_SAVEDATA_FILE
@@ -134,6 +142,7 @@ const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
 const char *empty_log_message = "empty log message received!";
 const char *msgsDir = "./messages";
 const char *masterFile = "./db/toxproxymasterpubkey.txt";
+const char *tokenFile = "./db/token.txt";
 
 #ifdef WRITE_MY_TOXID_TO_FILE
 const char *my_toxid_filename_txt = "toxid.txt";
@@ -347,6 +356,7 @@ void killSwitch()
     unlink(savedata_filename);
 #endif
     unlink(masterFile);
+    unlink(tokenFile);
     toxProxyLog(1, "todo implement deleting messages");
     tox_loop_running = 0;
     exit(0);
@@ -960,6 +970,60 @@ void add_master(const char *public_key_hex)
     }
 }
 
+void add_token(const char *token_str)
+{
+    if (file_exists(tokenFile)) {
+        toxProxyLog(2, "Tokenfile already exists, deleting it");
+        unlink(tokenFile);
+    }
+
+    FILE *f = fopen(tokenFile, "wb");
+
+    if (f) {
+        fwrite(token_str, strlen(token_str), 1, f);
+        fprintf(stdout, "saved token:%s\n", NOTIFICATION__device_token);
+        toxProxyLog(2, "saved token:%s\n", NOTIFICATION__device_token);
+        fclose(f);
+    }
+}
+
+void read_token_from_file()
+{
+    if (!file_exists(tokenFile)) {
+        return;
+    }
+
+    FILE *f = fopen(tokenFile, "rb");
+
+    if (! f) {
+        return;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (fsize < 1) {
+        fclose(f);
+        return;
+    }
+
+    if (NOTIFICATION__device_token)
+    {
+        free(NOTIFICATION__device_token);
+        NOTIFICATION__device_token = NULL;
+    }
+
+    NOTIFICATION__device_token = calloc(1, fsize + 2);
+    size_t res = fread(NOTIFICATION__device_token, fsize, 1, f);
+    if (res) {}
+
+    fprintf(stdout, "loaded token:%s\n", NOTIFICATION__device_token);
+    toxProxyLog(2, "loaded token:%s\n", NOTIFICATION__device_token);
+
+    fclose(f);
+}
+
 bool is_master(const char *public_key_hex)
 {
     //toxProxyLog(2, "enter:is_master");
@@ -1425,7 +1489,8 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
             memcpy(NOTIFICATION__device_token, (data + 1), (length - 1));
             toxProxyLog(0, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", NOTIFICATION__device_token);
             fprintf(stdout, "received token:%s\n", NOTIFICATION__device_token);
-            // TODO: save notification token to file, and read from file when ToxProxy is restarted
+            // save notification token to file
+            add_token(NOTIFICATION__device_token);
         }
         return;
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_FRIEND_PUBKEY_FOR_PROXY) {
@@ -1822,6 +1887,11 @@ int main(int argc, char *argv[])
     // free(x);
     // x[0] = 1;
     // ---- test ASAN ----
+
+    fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
+    toxProxyLog(2, "ToxProxy version: %s\n", global_version_string);
+
+    read_token_from_file();
 
     on_start();
 
