@@ -296,7 +296,7 @@ chmod 755 -R /artefacts/
       --cap-add SYS_ADMIN \
       --security-opt apparmor:unconfined \
      "$system_to_build_for_orig" \
-     /bin/bash #/bin/sh -c "apk add bash >/dev/null 2>/dev/null; /bin/bash /script/run.sh"
+     /bin/sh -c "apk add bash >/dev/null 2>/dev/null; /bin/bash /script/run.sh"
      if [ $? -ne 0 ]; then
         echo "** ERROR **:$system_to_build_for_orig"
         exit 1
