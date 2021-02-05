@@ -223,6 +223,7 @@ $_INST_/lib/libtoxcore.a \
 -lavutil \
 -lsodium \
 -lm \
+-lcurl \
 -lpthread \
 -o ToxProxy
 
@@ -232,5 +233,6 @@ $_INST_/lib/libtoxcore.a \
 ls -hal ToxProxy
 file ToxProxy
 ldd ToxProxy >/dev/null
+pwd
 
 
