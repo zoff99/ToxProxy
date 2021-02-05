@@ -949,6 +949,9 @@ void add_master(const char *public_key_hex)
     }
 
     toxProxyLog(2, "added master");
+
+    fprintf(stdout, "added master:%s\n", public_key_hex);
+
     FILE *f = fopen(masterFile, "wb");
 
     if (f) {
@@ -1114,18 +1117,21 @@ void self_connection_status_cb(Tox *tox, TOX_CONNECTION connection_status, void 
     switch (connection_status) {
         case TOX_CONNECTION_NONE:
             toxProxyLog(2, "Connection Status changed to: Offline");
+            fprintf(stdout, "Connection Status changed to:Offline\n");
             my_connection_status = TOX_CONNECTION_NONE;
             on_offline();
             break;
 
         case TOX_CONNECTION_TCP:
             toxProxyLog(2, "Connection Status changed to: Online via TCP");
+            fprintf(stdout, "Connection Status changed to:Online via TCP\n");
             my_connection_status = TOX_CONNECTION_TCP;
             on_online();
             break;
 
         case TOX_CONNECTION_UDP:
             toxProxyLog(2, "Connection Status changed to: Online via UDP");
+            fprintf(stdout, "Connection Status changed to:Online via UDP\n");
             my_connection_status = TOX_CONNECTION_UDP;
             on_online();
             break;
@@ -1418,6 +1424,7 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
             NOTIFICATION__device_token = calloc(1, (length + 1));
             memcpy(NOTIFICATION__device_token, (data + 1), (length - 1));
             toxProxyLog(0, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", NOTIFICATION__device_token);
+            fprintf(stdout, "received token:%s\n", NOTIFICATION__device_token);
             // TODO: save notification token to file, and read from file when ToxProxy is restarted
         }
         return;
@@ -1922,6 +1929,15 @@ int main(int argc, char *argv[])
 
         if (tox_self_get_connection_status(tox) && off) {
             toxProxyLog(2, "Tox online, took %llu seconds", time(NULL) - cur_time);
+
+            fprintf(stdout, "#############################################################\n");
+            fprintf(stdout, "#############################################################\n");
+            fprintf(stdout, "\n");
+            fprintf(stdout, "ToxID:%s\n", tox_id_hex);
+            fprintf(stdout, "\n");
+            fprintf(stdout, "#############################################################\n");
+            fprintf(stdout, "#############################################################\n");
+
             off = 0;
             break;
         }
