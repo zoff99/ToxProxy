@@ -45,6 +45,7 @@ static const char global_version_string[] = "0.99.3";
 // define this so every run creates a new (timestamped) logfile and doesn't overwrite previous logfiles.
 // #define UNIQLOGFILE
 
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdint.h>
