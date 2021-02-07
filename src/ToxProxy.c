@@ -2026,6 +2026,15 @@ int main(int argc, char *argv[])
 
             if (try >= max_tries) {
                     toxProxyLog(1, "Tox NOT online for a long time, breaking bootstrap loop and starting iteration anyway.");
+
+                    fprintf(stdout, "#############################################################\n");
+                    fprintf(stdout, "#############################################################\n");
+                    fprintf(stdout, "\n");
+                    fprintf(stdout, "ToxID:%s\n", tox_id_hex);
+                    fprintf(stdout, "\n");
+                    fprintf(stdout, "#############################################################\n");
+                    fprintf(stdout, "#############################################################\n");
+
                     // break the loop and start anyway
                     // we will bootstrap again later if we are not online every few seconds
                     break;
