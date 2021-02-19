@@ -28,8 +28,8 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 4
-static const char global_version_string[] = "0.99.4";
+#define VERSION_PATCH 5
+static const char global_version_string[] = "0.99.5";
 // ----------- version -----------
 // ----------- version -----------
 
