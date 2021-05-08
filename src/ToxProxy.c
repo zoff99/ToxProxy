@@ -1109,8 +1109,8 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
 void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, const uint8_t *message, size_t length,
                        void *user_data)
 {
-    char *default_msg = "YOU are using the old Message format! this is not supported!";
-    tox_friend_send_message(tox, friend_number, type, (uint8_t *) default_msg, strlen(default_msg), NULL);
+    // char *default_msg = "YOU are using the old Message format! this is not supported!";
+    // tox_friend_send_message(tox, friend_number, type, (uint8_t *) default_msg, strlen(default_msg), NULL);
 
     toxProxyLog(2, "YOU are using the old Message: fnum=%d", friend_number);
 }
