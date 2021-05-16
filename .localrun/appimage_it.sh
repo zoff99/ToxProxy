@@ -9,8 +9,9 @@ echo $_HOME_
 cd $_HOME_
 
 
+# ubuntu:16.04
+
 build_for='
-ubuntu:16.04
 ubuntu:18.04
 '
 

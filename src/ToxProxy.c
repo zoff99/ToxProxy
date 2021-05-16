@@ -100,13 +100,21 @@ static const char global_version_string[] = "0.99.5";
 
 static char *NOTIFICATION__device_token = NULL;
 
+#define NOTI__device_token_min_len 5
+#define NOTI__device_token_max_len 300
+
 #define NOTIFICATION_METHOD_NONE 0
 #define NOTIFICATION_METHOD_TCP  1
 #define NOTIFICATION_METHOD_HTTP 2
+#define NOTIFICATION_METHOD_GOTIFY_UP 3
 
-#define NOTIFICATION_METHOD NOTIFICATION_METHOD_HTTP
+#define NOTIFICATION_METHOD NOTIFICATION_METHOD_GOTIFY_UP
 
 #if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
+#include <curl/curl.h>
+#endif
+
+#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP
 #include <curl/curl.h>
 #endif
 
@@ -1329,7 +1337,8 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                                         toxProxyLog(2, "is_answer_to_synced_message: found id %s in %s", comp_str, dp->d_name);
                                         // now delete all files for that id
                                         char *delete_file_glob = calloc(1, 1000);
-                                        snprintf(delete_file_glob, BASE_NAME_GLOB_LEN, "%s", dp->d_name);
+                                        int ret_snprintf = snprintf(delete_file_glob, BASE_NAME_GLOB_LEN, "%s", dp->d_name);
+                                        if (ret_snprintf){}
                                         char *run_cmd = calloc(1, 1000);
                                         sprintf(run_cmd, "rm %s/%s*", friendDir, delete_file_glob);
                                         toxProxyLog(2, "is_answer_to_synced_message: running cmd: %s", run_cmd);
@@ -1467,7 +1476,7 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
     if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_PROXY_KILL_SWITCH) {
         killSwitch();
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN) {
-        if ((length > 10) && (length < 300))
+        if ((length > NOTI__device_token_min_len) && (length < NOTI__device_token_max_len))
         {
             toxProxyLog(0, "received CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN message");
             NOTIFICATION__device_token = calloc(1, (length + 1));
@@ -1779,6 +1788,12 @@ int ping_push_service()
         need_send_notification = 1;
         return 1;
     }
+    else if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+    {
+        toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
+        need_send_notification = 1;
+        return 1;
+    }
     else
     {
         return 1;
@@ -1797,60 +1812,144 @@ static void *notification_thread_func(void *data)
             }
             else
             {
-                toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD HTTP");
-                int result = 1;
-                CURL *curl = NULL;
-                CURLcode res = 0;
-
-                size_t max_buf_len = strlen(HTTP_PUSH__DST_URL) + strlen(NOTIFICATION__device_token) + 1;
-
-                char buf[max_buf_len + 1];
-                memset(buf, 0, max_buf_len + 1);
-                snprintf(buf, max_buf_len, "%s%s", HTTP_PUSH__DST_URL, NOTIFICATION__device_token);
-
-                curl = curl_easy_init();
-
-                if (curl)
+                if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP)
                 {
-                    struct string s;
-                    init_string(&s);
+                    toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD HTTP");
+                    int result = 1;
+                    CURL *curl = NULL;
+                    CURLcode res = 0;
 
-                    curl_easy_setopt(curl, CURLOPT_URL, buf);
-                    // toxProxyLog(9, "get_url=%s\n", buf);
-                    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-                    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+                    size_t max_buf_len = strlen(HTTP_PUSH__DST_URL) + strlen(NOTIFICATION__device_token) + 1;
 
-                    res = curl_easy_perform(curl);
+                    char buf[max_buf_len + 1];
+                    memset(buf, 0, max_buf_len + 1);
+                    snprintf(buf, max_buf_len, "%s%s", HTTP_PUSH__DST_URL, NOTIFICATION__device_token);
 
-                    if (res != CURLE_OK)
+                    curl = curl_easy_init();
+
+                    if (curl)
                     {
-                        toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
-                    }
-                    else
-                    {
-                        // toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                        struct string s;
+                        init_string(&s);
 
-                        char *found = strstr((const char *)s.ptr, (const char *)"OK");
+                        curl_easy_setopt(curl, CURLOPT_URL, buf);
+                        // toxProxyLog(9, "get_url=%s\n", buf);
+                        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+                        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
 
-                        if (found == NULL)
+                        res = curl_easy_perform(curl);
+
+                        if (res != CURLE_OK)
                         {
-                            toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                            toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
                         }
                         else
                         {
-                            toxProxyLog(9, "server_answer:OK:%s\n", s.ptr);
-                            result = 0;
+                            // toxProxyLog(9, "server_answer=%s\n", s.ptr);
+
+                            char *found = strstr((const char *)s.ptr, (const char *)"OK");
+
+                            if (found == NULL)
+                            {
+                                toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                            }
+                            else
+                            {
+                                toxProxyLog(9, "server_answer:OK:%s\n", s.ptr);
+                                result = 0;
+                            }
+                            free(s.ptr);
+                            s.ptr = NULL;
                         }
-                        free(s.ptr);
-                        s.ptr = NULL;
+
+                        curl_easy_cleanup(curl);
                     }
 
-                    curl_easy_cleanup(curl);
+                    if (result == 0)
+                    {
+                        need_send_notification = 0;
+                    }
                 }
-
-                if (result == 0)
+                else if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
                 {
-                    need_send_notification = 0;
+                    toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
+                    int result = 1;
+                    CURL *curl = NULL;
+                    curl_mime *form;
+                    curl_mimepart *field;
+                    CURLcode res = 0;
+
+                    size_t max_buf_len = strlen(NOTIFICATION__device_token) + 1;
+
+                    char buf[max_buf_len + 1];
+                    memset(buf, 0, max_buf_len + 1);
+                    snprintf(buf, max_buf_len, "%s", NOTIFICATION__device_token);
+
+                    curl = curl_easy_init();
+
+                    if (curl)
+                    {
+                        struct string s;
+                        init_string(&s);
+
+                        /* Build an HTTP form */
+                        form = curl_mime_init(curl);
+
+                        //
+                        // example:
+                        // curl "https://gotify.fedilab.app/message?token=<apptoken>" -F "title=my title" -F "message=my message" -F "priority=5"
+                        //
+                        field = curl_mime_addpart(form);
+                        curl_mime_name(field, "title");
+                        curl_mime_data(field, "title", CURL_ZERO_TERMINATED);
+
+                        field = curl_mime_addpart(form);
+                        curl_mime_name(field, "message");
+                        curl_mime_data(field, "message", CURL_ZERO_TERMINATED);
+
+                        field = curl_mime_addpart(form);
+                        curl_mime_name(field, "priority");
+                        curl_mime_data(field, "5", CURL_ZERO_TERMINATED);
+
+                        curl_easy_setopt(curl, CURLOPT_MIMEPOST, form);
+                        curl_easy_setopt(curl, CURLOPT_URL, buf);
+
+                        toxProxyLog(9, "request=%s\n", buf);
+
+                        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+                        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+
+                        res = curl_easy_perform(curl);
+
+                        if (res != CURLE_OK)
+                        {
+                            toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
+                        }
+                        else
+                        {
+                            char *found = strstr((const char *)s.ptr, (const char *)"\"appid\"");
+
+                            if (found == NULL)
+                            {
+                                toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                            }
+                            else
+                            {
+                                toxProxyLog(9, "server_answer:OK:%s\n", s.ptr);
+                                result = 0;
+                            }
+                            free(s.ptr);
+                            s.ptr = NULL;
+                        }
+
+                        curl_easy_cleanup(curl);
+                        curl_mime_free(form);
+                    }
+
+                    if (result == 0)
+                    {
+                        need_send_notification = 0;
+                    }
                 }
             }
         }
@@ -1880,7 +1979,7 @@ int main(int argc, char *argv[])
 
     on_start();
 
-#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
+#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP) || (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
     curl_global_init(CURL_GLOBAL_ALL);
     need_send_notification = 0;
     notification_thread_stop = 0;
@@ -2092,7 +2191,7 @@ int main(int argc, char *argv[])
     tox_kill(tox);
 #endif
 
-#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
+#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP) || (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
     notification_thread_stop = 1;
     pthread_join(notification_thread, NULL);
 
