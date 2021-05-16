@@ -232,7 +232,7 @@ cd /workspace/data/
 
 rm -Rf build2
 mkdir -p build2
-cd build2/ 
+cd build2/
 
 export PKG_CONFIG_PATH=/workspace/inst/lib/pkgconfig
 
