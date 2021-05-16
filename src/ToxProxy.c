@@ -1892,26 +1892,7 @@ static void *notification_thread_func(void *data)
                         struct string s;
                         init_string(&s);
 
-                        /* Build an HTTP form */
-                        form = curl_mime_init(curl);
-
-                        //
-                        // example:
-                        // curl "https://gotify.fedilab.app/message?token=<apptoken>" -F "title=my title" -F "message=my message" -F "priority=5"
-                        //
-                        field = curl_mime_addpart(form);
-                        curl_mime_name(field, "title");
-                        curl_mime_data(field, "title", CURL_ZERO_TERMINATED);
-
-                        field = curl_mime_addpart(form);
-                        curl_mime_name(field, "message");
-                        curl_mime_data(field, "message", CURL_ZERO_TERMINATED);
-
-                        field = curl_mime_addpart(form);
-                        curl_mime_name(field, "priority");
-                        curl_mime_data(field, "5", CURL_ZERO_TERMINATED);
-
-                        curl_easy_setopt(curl, CURLOPT_MIMEPOST, form);
+                        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
                         curl_easy_setopt(curl, CURLOPT_URL, buf);
 
                         toxProxyLog(9, "request=%s\n", buf);
@@ -1943,7 +1924,6 @@ static void *notification_thread_func(void *data)
                         }
 
                         curl_easy_cleanup(curl);
-                        curl_mime_free(form);
                     }
 
                     if (result == 0)
