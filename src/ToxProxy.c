@@ -1875,8 +1875,6 @@ static void *notification_thread_func(void *data)
                     toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
                     int result = 1;
                     CURL *curl = NULL;
-                    curl_mime *form;
-                    curl_mimepart *field;
                     CURLcode res = 0;
 
                     size_t max_buf_len = strlen(NOTIFICATION__device_token) + 1;
