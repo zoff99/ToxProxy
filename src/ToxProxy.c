@@ -99,6 +99,7 @@ static const char global_version_string[] = "0.99.5";
 #include <sys/types.h>
 
 static char *NOTIFICATION__device_token = NULL;
+static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
 
 #define NOTI__device_token_min_len 5
 #define NOTI__device_token_max_len 300
@@ -1879,54 +1880,65 @@ static void *notification_thread_func(void *data)
 
                     size_t max_buf_len = strlen(NOTIFICATION__device_token) + 1;
 
-                    char buf[max_buf_len + 1];
-                    memset(buf, 0, max_buf_len + 1);
-                    snprintf(buf, max_buf_len, "%s", NOTIFICATION__device_token);
-
-                    curl = curl_easy_init();
-
-                    if (curl)
+                    if (
+                        (max_buf_len <= strlen(NOTIFICATION_GOTIFY_UP_PREFIX))
+                        ||
+                        (strncmp(NOTIFICATION_GOTIFY_UP_PREFIX, NOTIFICATION__device_token, strlen(NOTIFICATION_GOTIFY_UP_PREFIX)) != 0)
+                       )
                     {
-                        struct string s;
-                        init_string(&s);
+                        // HINT: token does not start with "https://"
+                    }
+                    else
+                    {
+                        char buf[max_buf_len + 1];
+                        memset(buf, 0, max_buf_len + 1);
+                        snprintf(buf, max_buf_len, "%s", NOTIFICATION__device_token);
 
-                        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
-                        curl_easy_setopt(curl, CURLOPT_URL, buf);
+                        curl = curl_easy_init();
 
-                        toxProxyLog(9, "request=%s\n", buf);
-
-                        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-                        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
-
-                        res = curl_easy_perform(curl);
-
-                        if (res != CURLE_OK)
+                        if (curl)
                         {
-                            toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
-                        }
-                        else
-                        {
-                            char *found = strstr((const char *)s.ptr, (const char *)"\"appid\"");
+                            struct string s;
+                            init_string(&s);
 
-                            if (found == NULL)
+                            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
+                            curl_easy_setopt(curl, CURLOPT_URL, buf);
+
+                            toxProxyLog(9, "request=%s\n", buf);
+
+                            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+                            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+
+                            res = curl_easy_perform(curl);
+
+                            if (res != CURLE_OK)
                             {
-                                toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                                toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
                             }
                             else
                             {
-                                toxProxyLog(9, "server_answer:OK:%s\n", s.ptr);
-                                result = 0;
+                                char *found = strstr((const char *)s.ptr, (const char *)"\"appid\"");
+
+                                if (found == NULL)
+                                {
+                                    toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                                }
+                                else
+                                {
+                                    toxProxyLog(9, "server_answer:OK:%s\n", s.ptr);
+                                    result = 0;
+                                }
+                                free(s.ptr);
+                                s.ptr = NULL;
                             }
-                            free(s.ptr);
-                            s.ptr = NULL;
+
+                            curl_easy_cleanup(curl);
                         }
 
-                        curl_easy_cleanup(curl);
-                    }
-
-                    if (result == 0)
-                    {
-                        need_send_notification = 0;
+                        if (result == 0)
+                        {
+                            need_send_notification = 0;
+                        }
                     }
                 }
             }
