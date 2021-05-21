@@ -1917,16 +1917,16 @@ static void *notification_thread_func(void *data)
                             }
                             else
                             {
-                                char *found = strstr((const char *)s.ptr, (const char *)"\"appid\"");
-
-                                if (found == NULL)
+                                long http_code = 0;
+                                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+                                if ((http_code < 300) && (http_code > 199))
                                 {
-                                    toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                                    toxProxyLog(9, "server_answer:OK:CURLINFO_RESPONSE_CODE=%ld, %s\n", http_code, s.ptr);
+                                    result = 0;
                                 }
                                 else
                                 {
-                                    toxProxyLog(9, "server_answer:OK:%s\n", s.ptr);
-                                    result = 0;
+                                    toxProxyLog(9, "server_answer:ERROR:CURLINFO_RESPONSE_CODE=%ld, %s\n", http_code, s.ptr);
                                 }
                                 free(s.ptr);
                                 s.ptr = NULL;
