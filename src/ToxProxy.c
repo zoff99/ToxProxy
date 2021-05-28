@@ -1443,9 +1443,17 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
         } else {
             toxProxyLog(9, "call writeMessageHelper()");
             // nicht vom master, also wohl ein freund vom master.
+
+            // quickly send back an ACK, that toxproxy has received the message
+            if (raw_message_len >= TOX_PUBLIC_KEY_SIZE)
+            {
+                uint8_t *msgid_acked = calloc(1, TOX_PUBLIC_KEY_SIZE);
+                memcpy(msgid_acked, raw_message, TOX_PUBLIC_KEY_SIZE);
+                tox_util_friend_send_msg_receipt_v2(tox, friend_number, msgid_acked, 0);
+            }
+
+            // save the message to storage
             writeMessageHelper(tox, friend_number, raw_message, raw_message_len, TOX_FILE_KIND_MESSAGEV2_SEND);
-            //TODO FIXME send acknowledgment here (message v2 ohne text mit wrapper = kompliziert laut tox, 3 bis 4 functions aufruf notwendig)
-            // send_text_message_to_friend(tox, friend_number, "thank you for using this proxy. The message will be relayed as soon as my master comes online.");
         }
 
         free(message_text);
