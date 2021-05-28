@@ -9,10 +9,10 @@ echo $_HOME_
 cd $_HOME_
 
 
+# ubuntu:18.04
 
 build_for='
 ubuntu:16.04
-ubuntu:18.04
 '
 
 for system_to_build_for in $build_for ; do
