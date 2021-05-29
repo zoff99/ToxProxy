@@ -1444,16 +1444,16 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             toxProxyLog(9, "call writeMessageHelper()");
             // nicht vom master, also wohl ein freund vom master.
 
-            // quickly send back an ACK, that toxproxy has received the message
+            // save the message to storage
+            writeMessageHelper(tox, friend_number, raw_message, raw_message_len, TOX_FILE_KIND_MESSAGEV2_SEND);
+
+            // send back an ACK, that toxproxy has received the message
             if (raw_message_len >= TOX_PUBLIC_KEY_SIZE)
             {
                 uint8_t *msgid_acked = calloc(1, TOX_PUBLIC_KEY_SIZE);
                 memcpy(msgid_acked, raw_message, TOX_PUBLIC_KEY_SIZE);
                 tox_util_friend_send_msg_receipt_v2(tox, friend_number, msgid_acked, 0);
             }
-
-            // save the message to storage
-            writeMessageHelper(tox, friend_number, raw_message, raw_message_len, TOX_FILE_KIND_MESSAGEV2_SEND);
         }
 
         free(message_text);
