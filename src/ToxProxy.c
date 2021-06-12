@@ -299,15 +299,15 @@ void bin2upHex(const uint8_t *bin, uint32_t bin_size, char *hex, uint32_t hex_si
 unsigned int char_to_int(char c)
 {
     if (c >= '0' && c <= '9') {
-        return c - '0';
+        return (uint8_t)c - '0';
     }
 
     if (c >= 'A' && c <= 'F') {
-        return 10 + c - 'A';
+        return 10 + (uint8_t)c - 'A';
     }
 
     if (c >= 'a' && c <= 'f') {
-        return 10 + c - 'a';
+        return 10 + (uint8_t)c - 'a';
     }
 
     return -1;
