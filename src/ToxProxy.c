@@ -1558,7 +1558,7 @@ void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
             sprintf(msgPath_msg_id, "%s__%s__", msgPath, msgid2_str);
             toxProxyLog(9, "send_sync_msg_single: writing new msg_id to file: %s", msgPath_msg_id);
             FILE *f_msg_id = fopen(msgPath_msg_id, "wb");
-            fwrite(msgid2_str, 1, 1, f_msg_id);
+            fwrite(msgid2_str, 1, 1, f_msg_id); // write only the 1st byte into the file, the ID is already part of the filename
             fclose(f_msg_id);
             free(msgPath_msg_id);
         }
