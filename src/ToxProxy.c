@@ -360,7 +360,7 @@ void on_offline()
     uint32_t my_last_online_ts_ = (uint32_t)get_unix_time();
 
     if (my_last_online_ts_ > (BOOTSTRAP_AFTER_OFFLINE_SECS * 1000)) {
-        // give tbw 2 seconds to go online by itself, otherwise we bootstrap again
+        // give 2 seconds to go online by itself, otherwise we bootstrap again
         my_last_online_ts = my_last_online_ts_ - ((BOOTSTRAP_AFTER_OFFLINE_SECS - 2) * 1000);
     }
 }
