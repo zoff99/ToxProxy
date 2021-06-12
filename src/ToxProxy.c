@@ -775,7 +775,7 @@ void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t 
 
     if (length > TOX_MAX_MESSAGE_LENGTH) {
         length = TOX_MAX_MESSAGE_LENGTH;
-        len_copy = TOX_MAX_MESSAGE_LENGTH - (TOX_MAX_MESSAGE_LENGTH - (length_orig + 64));
+        len_copy = TOX_MAX_MESSAGE_LENGTH - 64;
     }
 
     uint8_t *message = calloc(1, length);
@@ -824,7 +824,7 @@ void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t 
     snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d_%02d%02d-%02d,%06ld",
              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
 
-    char *msgPath = calloc(1, sizeof(userDir) + 1 + sizeof(timestamp) + 4 + 1);
+    char *msgPath = calloc(1, sizeof(userDir) + 1 + sizeof(timestamp) + 5 + 1);
     strcpy(msgPath, userDir);
     strcat(msgPath, "/");
     strcat(msgPath, timestamp);
