@@ -1029,7 +1029,7 @@ bool is_master(const char *public_key_hex)
         return false;
     }
 
-    char *masterPubKeyHexSaved = calloc(1, fsize);
+    char *masterPubKeyHexSaved = calloc(1, fsize + 2);
     size_t res = fread(masterPubKeyHexSaved, fsize, 1, f);
 
     if (res) {}
