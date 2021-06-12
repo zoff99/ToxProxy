@@ -88,8 +88,6 @@ static const char global_version_string[] = "0.99.6";
 #include <tox/toxutil.h>
 #endif
 
-#include "push_server_config.h"
-
 // timestamps for printf output
 #include <time.h>
 #include <sys/time.h>
@@ -110,6 +108,15 @@ static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
 #define NOTIFICATION_METHOD_GOTIFY_UP 3
 
 #define NOTIFICATION_METHOD NOTIFICATION_METHOD_GOTIFY_UP
+
+#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
+    #include "push_server_config.h"
+#else
+    #define PUSH__DST_PORT 1234
+    #define PUSH__DST_HOST "127.0.0.1"
+    #define PUSH__MAXDATASIZE 200
+    #define HTTP_PUSH__DST_URL "https://127.0.0.1/notify"
+#endif
 
 #if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
 #include <curl/curl.h>
