@@ -1244,6 +1244,7 @@ void friend_sync_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *
     toxProxyLog(9, "enter friend_sync_message_v2_cb");
 }
 
+/* TODO: CHECK */
 bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t length)
 {
     bool ret = false;
@@ -1368,7 +1369,6 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     toxProxyLog(9, "enter friend_read_receipt_message_v2_cb");
 
 	// check if the received msg is confirm conference msg received
-	// todo: when sending cached msgs to master: don't delete them instantly, instead only delete them here, if the receipt message's id is equal to one of the stored ones.
 	// also: make long enough pauses in sending messages to master to allow for receipt msgs to come in and get processed.
 
 #ifdef TOX_HAVE_TOXUTIL
