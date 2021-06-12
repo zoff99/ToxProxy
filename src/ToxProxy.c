@@ -1645,7 +1645,6 @@ void send_sync_msgs(Tox *tox)
     closedir(dfd);
 }
 
-
 struct string {
     char *ptr;
     size_t len;
@@ -1682,7 +1681,6 @@ static size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s)
 
     return size*nmemb;
 }
-
 
 /*
  * return: 0 --> ok
@@ -1796,6 +1794,7 @@ int ping_push_service()
     }
 }
 
+/* TODO: CHECK */
 static void *notification_thread_func(void *data)
 {
     while (notification_thread_stop == 0)
