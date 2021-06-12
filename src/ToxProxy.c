@@ -931,26 +931,6 @@ bool file_exists(const char *path)
     return stat(path, &s) == 0;
 }
 
-// fill string with toxid in upper case hex.
-// size of toxid_str needs to be: [TOX_ADDRESS_SIZE*2 + 1] !!
-void get_my_toxid(Tox *tox, char *toxid_str)
-{
-    uint8_t tox_id_bin[TOX_ADDRESS_SIZE];
-    CLEAR(tox_id_bin);
-
-    tox_self_get_address(tox, tox_id_bin);
-    char tox_id_hex_local[TOX_ADDRESS_SIZE * 2 + 1];
-    CLEAR(tox_id_hex_local);
-
-    sodium_bin2hex(tox_id_hex_local, sizeof(tox_id_hex_local), tox_id_bin, sizeof(tox_id_bin));
-
-    for (size_t i = 0; i < sizeof(tox_id_hex_local) - 1; i ++) {
-        tox_id_hex_local[i] = toupper(tox_id_hex_local[i]);
-    }
-
-    snprintf(toxid_str, (size_t)(TOX_ADDRESS_SIZE * 2 + 1), "%s", (const char *)tox_id_hex_local);
-}
-
 void add_master(const char *public_key_hex)
 {
 
