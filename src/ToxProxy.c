@@ -650,7 +650,6 @@ Tox *openTox()
     return tox;
 }
 
-
 void shuffle(int *array, size_t n)
 {
     struct timeval tv;
