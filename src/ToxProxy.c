@@ -803,7 +803,7 @@ void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t 
     bin2upHex((const uint8_t *)msgid, tox_public_key_size(), msg_id_hex, tox_public_key_hex_size);
     toxProxyLog(0, "writeConferenceMessage:msg_id_hex=%s", msg_id_hex);
 
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1];
+    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
     CLEAR(userDir);
 
     strcpy(userDir, msgsDir);
@@ -815,7 +815,7 @@ void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t 
 
     //TODO FIXME use message v2 message id / hash instead of timestamp of receiving / processing message!
 
-    char timestamp[strlen("0000-00-00_0000-00,000000") + 1]; // = "0000-00-00_0000-00,000000";
+    char timestamp[strlen("0000-00-00_0000-00,000000") + 1 + 1]; // = "0000-00-00_0000-00,000000";
     CLEAR(timestamp);
 
     struct timeval tv;
@@ -824,7 +824,7 @@ void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t 
     snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d_%02d%02d-%02d,%06ld",
              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
 
-    char *msgPath = calloc(1, sizeof(userDir) + 1 + sizeof(timestamp) + 5 + 1);
+    char *msgPath = calloc(1, sizeof(userDir) + 1 + sizeof(timestamp) + 5 + 1 + 1);
     strcpy(msgPath, userDir);
     strcat(msgPath, "/");
     strcat(msgPath, timestamp);
