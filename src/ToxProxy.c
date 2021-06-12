@@ -313,12 +313,13 @@ unsigned int char_to_int(char c)
     return -1;
 }
 
-uint8_t *hex_string_to_bin2(const char *hex_string)
+/* this works only for hex strings the length of (TOX_ADDRESS_SIZE*2) */
+uint8_t *tox_address_hex_string_to_bin2(const char *hex_string)
 {
     size_t len = TOX_ADDRESS_SIZE;
     uint8_t *val = calloc(1, len);
 
-    for (size_t i = 0; i != len; ++i) {
+    for (size_t i = 0; i < len; ++i) {
         val[i] = (16 * char_to_int(hex_string[2 * i])) + (char_to_int(hex_string[2 * i + 1]));
     }
 
@@ -1554,7 +1555,7 @@ void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
         uint32_t rawMsgSize2 = tox_messagev2_size(fsize, TOX_FILE_KIND_MESSAGEV2_SYNC, 0);
         uint8_t *raw_message2 = calloc(1, rawMsgSize2);
         uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
-        uint8_t *pubKeyBin = hex_string_to_bin2(pubKeyHex);
+        uint8_t *pubKeyBin = tox_address_hex_string_to_bin2(pubKeyHex);
 
         if (msgFileName[strlen(msgFileName) - 1] == 'A') {
             // TOX_FILE_KIND_MESSAGEV2_ANSWER
