@@ -581,6 +581,27 @@ void updateToxSavedata(const Tox *tox)
     free(savedata);
 }
 
+uint8_t *get_friend_name(Tox *tox, uint32_t friend_number)
+{
+    TOX_ERR_FRIEND_QUERY error;
+    int name_size = tox_friend_get_name_size(tox, friend_number, &error);
+    if (name_size > 0)
+    {
+        uint8_t *f_name = calloc(1, name_size + 1);
+        if (f_name)
+        {
+            bool res = tox_friend_get_name(tox, friend_number, f_name, &error);
+            if (res == true)
+            {
+                return f_name;
+            }
+            free(f_name);
+        }
+    }
+
+    return NULL;
+}
+
 Tox *openTox()
 {
     Tox *tox = NULL;
@@ -1187,7 +1208,15 @@ void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE 
                           size_t length, void *user_data)
 {
     if (!is_master_friendnumber(tox, friend_number)) {
-        toxProxyLog(0, "received conference invite from somebody who's not master!");
+        uint8_t *f_name = get_friend_name(tox, friend_number);
+        if (f_name)
+        {
+            toxProxyLog(0, "received conference invite from somebody who's not master!:fnum=%d:fname=%s", friend_number, (char *)f_name);
+        }
+        else
+        {
+            toxProxyLog(0, "received conference invite from somebody who's not master!:fnum=%d", friend_number);
+        }
         return;
     }
 
@@ -1458,13 +1487,16 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
     }
 
     if (!is_master_friendnumber(tox, friend_number)) {
-        if (length > 0)
+        if (data[0] != 170)
         {
-            toxProxyLog(0, "received lossless package from somebody who's not master! : id=%d", (int)data[0]);
-        }
-        else
-        {
-            toxProxyLog(0, "received lossless package from somebody who's not master!");
+            if (length > 0)
+            {
+                toxProxyLog(0, "received lossless package from somebody who's not master! : id=%d", (int)data[0]);
+            }
+            else
+            {
+                toxProxyLog(0, "received lossless package from somebody who's not master!");
+            }
         }
         return;
     }
@@ -1496,8 +1528,10 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         CLEAR(public_key_hex);
         bin2upHex(public_key, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
         toxProxyLog(0, "added friend of my master (norequest) with pubkey: %s", public_key_hex);
+    } else if (data[0] == 170) {
+        // toxutil.c CAP_PACKET_ID
     } else {
-        toxProxyLog(0, "received unexpected ControlProxyMessageType");
+        toxProxyLog(0, "received unexpected ControlProxyMessageType:id=%d", (int)data[0]);
     }
 }
 
