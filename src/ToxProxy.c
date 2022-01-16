@@ -144,6 +144,7 @@ typedef enum CONTROL_PROXY_MESSAGE_TYPE {
     CONTROL_PROXY_MESSAGE_TYPE_ALL_MESSAGES_SENT = 177,
     CONTROL_PROXY_MESSAGE_TYPE_PROXY_KILL_SWITCH = 178,
     CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN = 179
+    CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND = 181
 } CONTROL_PROXY_MESSAGE_TYPE;
 
 FILE *logfile = NULL;
@@ -1862,6 +1863,7 @@ static void *notification_thread_func(void *data)
                         init_string(&s);
 
                         curl_easy_setopt(curl, CURLOPT_URL, buf);
+                        curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
                         // toxProxyLog(9, "get_url=%s\n", buf);
                         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
                         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
@@ -1931,6 +1933,7 @@ static void *notification_thread_func(void *data)
 
                             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
                             curl_easy_setopt(curl, CURLOPT_URL, buf);
+                            curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
 
                             toxProxyLog(9, "request=%s\n", buf);
 
