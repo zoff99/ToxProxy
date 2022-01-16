@@ -1428,7 +1428,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
 void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_message, size_t raw_message_len)
 {
 
-    toxProxyLog(9, "enter friend_message_v2_cb");
+    // toxProxyLog(9, "enter friend_message_v2_cb");
 
 #ifdef TOX_HAVE_TOXUTIL
     // now get the real data from msgV2 buffer
@@ -1440,7 +1440,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
         uint32_t text_length = 0;
         bool res = tox_messagev2_get_message_text(raw_message, (uint32_t) raw_message_len, (bool) false, (uint32_t) 0,
                    message_text, &text_length);
-        toxProxyLog(9, "friend_message_v2_cb:fn=%d res=%d msg=%s", (int) friend_number, (int) res, (char *) message_text);
+        // toxProxyLog(9, "friend_message_v2_cb:fn=%d res=%d msg=%s", (int) friend_number, (int) res, (char *) message_text);
 
         if (is_master_friendnumber(tox, friend_number)) {
             if ((strlen((char *) message_text) == (strlen("fp:") + tox_public_key_hex_size))
