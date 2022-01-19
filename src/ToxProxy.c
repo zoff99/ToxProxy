@@ -134,7 +134,7 @@ typedef struct DHT_node {
 } DHT_node;
 
 #define CURRENT_LOG_LEVEL 50 // 0 -> error, 1 -> warn, 2 -> info, 9 -> debug
-#define c_sleep(x) usleep_usec(1000*x)
+#define c_sleep(x) usleep_usec(1000*(x))
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
 
@@ -1445,14 +1445,19 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
         if (is_master_friendnumber(tox, friend_number)) {
             if ((strlen((char *) message_text) == (strlen("fp:") + tox_public_key_hex_size))
                     &&
-                    (strncmp((char *) message_text, "fp:", strlen("fp:")))) {
+                    (
+                     strncmp((char *) message_text, "fp:", strlen("fp:")) == 0
+                    )
+               ) {
                 char *pubKey = (char *)(message_text + 3);
                 uint8_t public_key_bin[tox_public_key_size()];
                 hex_string_to_bin(pubKey, tox_public_key_size() * 2, (char *) public_key_bin, tox_public_key_size());
                 tox_friend_add_norequest(tox, public_key_bin, NULL);
                 updateToxSavedata(tox);
-            } else if (strlen((char *) message_text) == strlen("DELETE_EVERYTHING")
-                       && strncmp((char *) message_text, "DELETE_EVERYTHING", strlen("DELETE_EVERYTHING"))) {
+            } else if (
+                          strlen((char *) message_text) == strlen("DELETE_EVERYTHING")
+                       && strncmp((char *) message_text, "DELETE_EVERYTHING", (size_t)(strlen("DELETE_EVERYTHING"))) == 0
+                      ) {
                 killSwitch();
             } else {
                 // send_text_message_to_friend(tox, friend_number, "Sorry, but this command has not been understood, please check the implementation or contact the developer.");
@@ -1764,7 +1769,7 @@ int ping_push_service()
         their_addr.sin_family = AF_INET;
         their_addr.sin_port = htons(PUSH__DST_PORT);
         their_addr.sin_addr = *((struct in_addr *)he->h_addr);
-        bzero(&(their_addr.sin_zero), 8);
+        memset(&(their_addr.sin_zero), 0, 8);
 
         if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
         {
