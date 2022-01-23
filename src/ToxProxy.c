@@ -1888,6 +1888,7 @@ static void *notification_thread_func(void *data)
                             if (found == NULL)
                             {
                                 toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                                result = 0; // do not retry, or the server may be spammed
                             }
                             else
                             {
@@ -1963,6 +1964,7 @@ static void *notification_thread_func(void *data)
                                 else
                                 {
                                     toxProxyLog(9, "server_answer:ERROR:CURLINFO_RESPONSE_CODE=%ld, %s\n", http_code, s.ptr);
+                                    result = 0; // do not retry, or the server may be spammed
                                 }
                                 free(s.ptr);
                                 s.ptr = NULL;
@@ -1979,7 +1981,7 @@ static void *notification_thread_func(void *data)
                 }
             }
         }
-        usleep_usec(1000 * 400); // sleep 400 ms
+        usleep_usec(1000 * 500); // sleep 500 ms
     }
 
     toxProxyLog(2, "Notification:Clean thread exit!\n");
