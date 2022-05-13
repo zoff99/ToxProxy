@@ -28,8 +28,8 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 9
-static const char global_version_string[] = "0.99.9";
+#define VERSION_PATCH 11
+static const char global_version_string[] = "0.99.11";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -789,8 +789,8 @@ void bootstrap(Tox *tox)
 
 }
 
-void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t *message_orig, size_t length_orig,
-                            uint32_t msg_type, char *peer_pubkey_hex)
+void writeConferenceMessage(Tox *tox, const char *sender_group_key_hex, const uint8_t *message_orig, size_t length_orig,
+                            uint32_t msg_type, char *peer_pubkey_hex, int is_group)
 {
     size_t length = length_orig + 64;
     size_t len_copy = length_orig;
@@ -830,7 +830,7 @@ void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t 
 
     strcpy(userDir, msgsDir);
     strcat(userDir, "/");
-    strcat(userDir, sender_key_hex);
+    strcat(userDir, sender_group_key_hex);
 
     mkdir(msgsDir, S_IRWXU);
     mkdir(userDir, S_IRWXU);
@@ -859,9 +859,12 @@ void writeConferenceMessage(Tox *tox, const char *sender_key_hex, const uint8_t 
         fclose(f);
     }
 
-    if (ping_push_service() == 1)
+    if (is_group != 1)
     {
-        ping_push_service();
+        if (ping_push_service() == 1)
+        {
+            ping_push_service();
+        }
     }
 
     free(raw_message_data);
@@ -938,13 +941,24 @@ void writeMessageHelper(Tox *tox, uint32_t friend_number, const uint8_t *message
 }
 
 void writeConferenceMessageHelper(Tox *tox, const uint8_t *conference_id, const uint8_t *message, size_t length,
-                                  char *peer_pubkey_hex)
+                                  char *peer_pubkey_hex, int is_group)
 {
-    char conference_id_hex[TOX_CONFERENCE_ID_SIZE * 2 + 1];
-    CLEAR(conference_id_hex);
+    if (is_group == 1)
+    {
+        char group_id_hex[TOX_GROUP_CHAT_ID_SIZE * 2 + 1];
+        CLEAR(group_id_hex);
 
-    bin2upHex(conference_id, TOX_CONFERENCE_ID_SIZE, conference_id_hex, (TOX_CONFERENCE_ID_SIZE * 2 + 1));
-    writeConferenceMessage(tox, conference_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex);
+        bin2upHex(conference_id, TOX_GROUP_CHAT_ID_SIZE, group_id_hex, (TOX_GROUP_CHAT_ID_SIZE * 2 + 1));
+        writeConferenceMessage(tox, group_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex, is_group);
+    }
+    else
+    {
+        char conference_id_hex[TOX_CONFERENCE_ID_SIZE * 2 + 1];
+        CLEAR(conference_id_hex);
+
+        bin2upHex(conference_id, TOX_CONFERENCE_ID_SIZE, conference_id_hex, (TOX_CONFERENCE_ID_SIZE * 2 + 1));
+        writeConferenceMessage(tox, conference_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex, is_group);
+    }
 }
 
 bool file_exists(const char *path)
@@ -1240,7 +1254,7 @@ void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_n
     bool res = tox_conference_peer_get_public_key(tox, conference_number, peer_number, public_key_bin, &error);
 
     if (res == false) {
-        toxProxyLog(0, "received conference from peer without pubkey?");
+        toxProxyLog(0, "received conference text message from peer without pubkey?");
         return;
     } else {
         char public_key_hex[tox_public_key_hex_size];
@@ -1258,7 +1272,7 @@ void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_n
                 toxProxyLog(0, "conference id unknown?");
                 return;
             } else {
-                writeConferenceMessageHelper(tox, conference_id_buffer, message, length, public_key_hex);
+                writeConferenceMessageHelper(tox, conference_id_buffer, message, length, public_key_hex, 0);
             }
         }
     }
@@ -1988,6 +2002,96 @@ static void *notification_thread_func(void *data)
     pthread_exit(0);
 }
 
+static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer_number, TOX_MESSAGE_TYPE type,
+                                   const uint8_t *message, size_t length, void *userdata)
+{
+    toxProxyLog(0, "received group text message group:%d peer:%d", groupnumber, peer_number);
+
+    uint8_t public_key_bin[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
+    CLEAR(public_key_bin);
+    Tox_Err_Group_Peer_Query error;
+    bool res = tox_group_peer_get_public_key(tox, groupnumber, peer_number, public_key_bin, &error);
+
+    if (res == false) {
+        toxProxyLog(0, "received group text message from peer without pubkey?");
+        return;
+    } else {
+        uint8_t group_id_buffer[TOX_GROUP_CHAT_ID_SIZE + 1];
+        CLEAR(group_id_buffer);
+        bool res2 = tox_group_get_chat_id(tox, groupnumber, group_id_buffer, NULL);
+        if (res2 == false) {
+            toxProxyLog(0, "group id unknown?");
+            return;
+        } else {
+            char public_key_hex[tox_public_key_hex_size];
+            CLEAR(public_key_hex);
+            bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
+
+            writeConferenceMessageHelper(tox, group_id_buffer, message, length, public_key_hex, 1);
+        }
+    }
+
+}
+
+static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *invite_data, size_t length,
+                                 const uint8_t *group_name, size_t group_name_length, void *user_data)
+{
+    size_t nick_len = tox_self_get_name_size(tox);
+    char self_nick[TOX_MAX_NAME_LENGTH + 1];
+    tox_self_get_name(tox, (uint8_t *) self_nick);
+    self_nick[nick_len] = '\0';
+
+    Tox_Err_Group_Invite_Accept error;
+    tox_group_invite_accept(tox, friend_number, invite_data, length,
+                                 (const uint8_t *)self_nick, nick_len, NULL, 0,
+                                 &error);
+
+    toxProxyLog(2, "tox_group_invite_accept:%d", error);
+    updateToxSavedata(tox);
+}
+
+
+static void group_peer_join_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, void *user_data)
+{
+    toxProxyLog(2, "Peer %d joined group %d", peer_id, group_number);
+}
+
+static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, Tox_Group_Exit_Type exit_type,
+                                    const uint8_t *name, size_t name_length, const uint8_t *part_message, size_t length, void *user_data)
+{
+    switch (exit_type) {
+        case TOX_GROUP_EXIT_TYPE_QUIT:
+        toxProxyLog(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_QUIT", peer_id, group_number, exit_type);
+            break;
+        case TOX_GROUP_EXIT_TYPE_TIMEOUT:
+        toxProxyLog(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_TIMEOUT", peer_id, group_number, exit_type);
+            break;
+        case TOX_GROUP_EXIT_TYPE_DISCONNECTED:
+        toxProxyLog(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_DISCONNECTED", peer_id, group_number, exit_type);
+            break;
+        case TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED:
+        toxProxyLog(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED", peer_id, group_number, exit_type);
+            break;
+        case TOX_GROUP_EXIT_TYPE_KICK:
+        toxProxyLog(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_KICK", peer_id, group_number, exit_type);
+            break;
+        case TOX_GROUP_EXIT_TYPE_SYNC_ERROR:
+        toxProxyLog(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_SYNC_ERROR", peer_id, group_number, exit_type);
+            break;
+    }
+}
+
+static void group_self_join_cb(Tox *tox, uint32_t group_number, void *user_data)
+{
+    toxProxyLog(2, "You joined group %d", group_number);
+    updateToxSavedata(tox);
+}
+
+static void group_join_fail_cb(Tox *tox, uint32_t group_number, Tox_Group_Join_Fail fail_type, void *user_data)
+{
+    toxProxyLog(2, "Joining group %d failed. reason: %d", group_number, fail_type);
+}
+
 int main(int argc, char *argv[])
 {
     openLogFile();
@@ -2093,6 +2197,15 @@ int main(int argc, char *argv[])
     tox_callback_friend_connection_status(tox, friendlist_onConnectionChange);
 #endif
 
+/*
+    tox_callback_group_message(tox, group_message_callback);
+    tox_callback_group_invite(tox, group_invite_cb);
+    tox_callback_group_peer_join(tox, group_peer_join_cb);
+    tox_callback_group_peer_exit(tox, group_peer_exit_cb);
+    tox_callback_group_self_join(tox, group_self_join_cb);
+    tox_callback_group_join_fail(tox, group_join_fail_cb);
+*/
+
     updateToxSavedata(tox);
 
 
@@ -2157,8 +2270,14 @@ int main(int argc, char *argv[])
     signal(SIGINT, sigint_handler);
     pthread_setname_np(pthread_self(), "t_main");
 
+    size_t num_friends = tox_self_get_friend_list_size(tox);
+    toxProxyLog(2, "num_friends=%d", (int)num_friends);
+
     size_t num_conferences = tox_conference_get_chatlist_size(tox);
     toxProxyLog(2, "num_conferences=%d", (int)num_conferences);
+
+    size_t num_groups = tox_group_get_number_groups(tox);
+    toxProxyLog(2, "num_groups=%d", (int)num_groups);
 
     int i = 0;
 
