@@ -999,7 +999,7 @@ void add_token(const char *token_str)
     if (f) {
         fwrite(token_str, strlen(token_str), 1, f);
         fprintf(stdout, "saved token:%s\n", NOTIFICATION__device_token);
-        toxProxyLog(2, "saved token:%s\n", NOTIFICATION__device_token);
+        toxProxyLog(2, "saved token:%s", NOTIFICATION__device_token);
         fclose(f);
     }
 }
@@ -1036,7 +1036,7 @@ void read_token_from_file()
     if (res) {}
 
     fprintf(stdout, "loaded token:%s\n", NOTIFICATION__device_token);
-    toxProxyLog(2, "loaded token:%s\n", NOTIFICATION__device_token);
+    toxProxyLog(2, "loaded token:%s", NOTIFICATION__device_token);
 
     fclose(f);
 }
@@ -1246,6 +1246,7 @@ void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE 
 void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, TOX_MESSAGE_TYPE type,
                            const uint8_t *message, size_t length, void *user_data)
 {
+    toxProxyLog(9, "enter conference_message_cb");
     toxProxyLog(0, "received conference text message conf:%d peer:%d", conference_number, peer_number);
 
     uint8_t public_key_bin[TOX_PUBLIC_KEY_SIZE];
@@ -1441,8 +1442,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
 
 void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_message, size_t raw_message_len)
 {
-
-    // toxProxyLog(9, "enter friend_message_v2_cb");
+    toxProxyLog(9, "enter friend_message_v2_cb");
 
 #ifdef TOX_HAVE_TOXUTIL
     // now get the real data from msgV2 buffer
@@ -1500,6 +1500,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
 
 void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data)
 {
+    toxProxyLog(9, "enter friend_lossless_packet_cb");
 
     if (length == 0) {
         toxProxyLog(0, "received empty lossless package!");
@@ -1635,7 +1636,8 @@ void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
 
 void send_sync_msgs_of_friend(Tox *tox, char *pubKeyHex)
 {
-    //toxProxyLog(3, "sending messages of friend: %s to master", pubKeyHex);
+    // toxProxyLog(9, "enter send_sync_msgs_of_friend");
+    // toxProxyLog(3, "sending messages of friend: %s to master", pubKeyHex);
 
     char *friendDir = calloc(1, strlen(msgsDir) + 1 + strlen(pubKeyHex) +
                              1); // last +1 is for terminating \0 I guess (without it, memory checker explodes..)
@@ -1711,7 +1713,7 @@ static void init_string(struct string *s)
 
     if (s->ptr == NULL)
     {
-        toxProxyLog(9, "malloc() failed\n");
+        toxProxyLog(9, "malloc() failed");
         exit(EXIT_FAILURE);
     }
 
@@ -1725,7 +1727,7 @@ static size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s)
 
     if (s->ptr == NULL)
     {
-        toxProxyLog(9, "realloc() failed\n");
+        toxProxyLog(9, "realloc() failed");
         exit(EXIT_FAILURE);
     }
 
@@ -1901,12 +1903,12 @@ static void *notification_thread_func(void *data)
 
                             if (found == NULL)
                             {
-                                toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                                toxProxyLog(9, "server_answer=%s", s.ptr);
                                 result = 0; // do not retry, or the server may be spammed
                             }
                             else
                             {
-                                toxProxyLog(9, "server_answer:OK:%s\n", s.ptr);
+                                toxProxyLog(9, "server_answer:OK:%s", s.ptr);
                                 result = 0;
                             }
                             free(s.ptr);
@@ -1955,7 +1957,7 @@ static void *notification_thread_func(void *data)
                             curl_easy_setopt(curl, CURLOPT_URL, buf);
                             curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
 
-                            toxProxyLog(9, "request=%s\n", buf);
+                            toxProxyLog(9, "request=%s", buf);
 
                             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
                             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
@@ -1972,12 +1974,12 @@ static void *notification_thread_func(void *data)
                                 curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
                                 if ((http_code < 300) && (http_code > 199))
                                 {
-                                    toxProxyLog(9, "server_answer:OK:CURLINFO_RESPONSE_CODE=%ld, %s\n", http_code, s.ptr);
+                                    toxProxyLog(9, "server_answer:OK:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
                                     result = 0;
                                 }
                                 else
                                 {
-                                    toxProxyLog(9, "server_answer:ERROR:CURLINFO_RESPONSE_CODE=%ld, %s\n", http_code, s.ptr);
+                                    toxProxyLog(9, "server_answer:ERROR:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
                                     result = 0; // do not retry, or the server may be spammed
                                 }
                                 free(s.ptr);
@@ -1998,7 +2000,7 @@ static void *notification_thread_func(void *data)
         usleep_usec(1000 * 500); // sleep 500 ms
     }
 
-    toxProxyLog(2, "Notification:Clean thread exit!\n");
+    toxProxyLog(2, "Notification:Clean thread exit!");
     pthread_exit(0);
 }
 
@@ -2105,7 +2107,7 @@ int main(int argc, char *argv[])
     // ---- test ASAN ----
 
     fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
-    toxProxyLog(2, "ToxProxy version: %s\n", global_version_string);
+    toxProxyLog(2, "ToxProxy version: %s", global_version_string);
 
     read_token_from_file();
 
@@ -2118,12 +2120,12 @@ int main(int argc, char *argv[])
 
     if (pthread_create(&notification_thread, NULL, notification_thread_func, (void *)NULL) != 0)
     {
-        toxProxyLog(0, "Notification Thread create failed\n");
+        toxProxyLog(0, "Notification Thread create failed");
     }
     else
     {
         pthread_setname_np(notification_thread, "t_notif");
-        toxProxyLog(2, "Notification Thread successfully created\n");
+        toxProxyLog(2, "Notification Thread successfully created");
     }
 #endif
 
@@ -2323,7 +2325,7 @@ int main(int argc, char *argv[])
         if (am_i_online == 0) {
             if ((my_last_online_ts + (BOOTSTRAP_AFTER_OFFLINE_SECS * 1000)) < (uint32_t)get_unix_time()) {
                 // then bootstap again
-                toxProxyLog(2, "Tox NOT online, bootstrapping again\n");
+                toxProxyLog(2, "Tox NOT online, bootstrapping again");
                 bootstrap(tox);
                 // reset timestamp, that we do not bootstrap on every tox_iterate() loop
                 my_last_online_ts = (uint32_t)get_unix_time();
