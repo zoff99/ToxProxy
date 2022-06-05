@@ -2,7 +2,7 @@
  ============================================================================
  Name        : ToxProxy.c
  Authors     : Thomas Käfer, Zoff
- Copyright   : 2019 - 2021
+ Copyright   : 2019 - 2022
 
 Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und richtig angezeigt.
 
@@ -173,6 +173,8 @@ const char *shell_cmd__onoffline = "./scripts/on_offline.sh 2> /dev/null";
 uint32_t my_last_online_ts = 0;
 #define BOOTSTRAP_AFTER_OFFLINE_SECS 30
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
+
+#define MAX_FILES_IN_ONE_MESSAGE_DIR 200
 
 uint32_t tox_public_key_hex_size = 0; //initialized in main
 uint32_t tox_address_hex_size = 0; //initialized in main
@@ -562,6 +564,26 @@ SizedSavedata dbSavedataAction(bool putData, const uint8_t *savedata, size_t sav
 }
 #endif
 
+static uint64_t count_file_in_dir(char *dir)
+{
+    struct dirent *dp = NULL;
+    DIR *fd = NULL;
+    uint64_t count = 0;
+
+    if ((fd = opendir(dir)) == NULL) {
+        return 0;
+    }
+
+    while ((dp = readdir(fd)) != NULL) {
+        if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) {
+            continue; /* skip self and parent */
+        }
+        count++;
+    }
+    closedir(fd);
+
+    return count;
+}
 
 void updateToxSavedata(const Tox *tox)
 {
@@ -853,11 +875,14 @@ void writeConferenceMessage(Tox *tox, const char *sender_group_key_hex, const ui
     strcat(msgPath, timestamp);
     strcat(msgPath, ".txtS");
 
-    FILE *f = fopen(msgPath, "wb");
+    if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
+    {
+        FILE *f = fopen(msgPath, "wb");
 
-    if (f) {
-        fwrite(raw_message_data, raw_message_len, 1, f);
-        fclose(f);
+        if (f) {
+            fwrite(raw_message_data, raw_message_len, 1, f);
+            fclose(f);
+        }
     }
 
     if (is_group != 1)
@@ -912,11 +937,14 @@ void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, u
         strcat(msgPath, ".txtS");
     }
 
-    FILE *f = fopen(msgPath, "wb");
+    if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
+    {
+        FILE *f = fopen(msgPath, "wb");
 
-    if (f) {
-        fwrite(message, length, 1, f);
-        fclose(f);
+        if (f) {
+            fwrite(message, length, 1, f);
+            fclose(f);
+        }
     }
 
     if (ping_push_service() == 1)
@@ -1564,6 +1592,10 @@ void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
     // last +1 is for terminating \0 I guess (without it, memory checker explodes..)
     sprintf(msgPath, "%s/%s/%s", msgsDir, pubKeyHex, msgFileName);
 
+    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
+    CLEAR(userDir);
+    sprintf(userDir, "%s/%s", msgsDir, pubKeyHex);
+
     FILE *f = fopen(msgPath, "rb");
     if (f) {
         fseek(f, 0, SEEK_END);
@@ -1613,9 +1645,14 @@ void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
         {
             sprintf(msgPath_msg_id, "%s__%s__", msgPath, msgid2_str);
             toxProxyLog(9, "send_sync_msg_single: writing new msg_id to file: %s", msgPath_msg_id);
-            FILE *f_msg_id = fopen(msgPath_msg_id, "wb");
-            fwrite(msgid2_str, 1, 1, f_msg_id); // write only the 1st byte into the file, the ID is already part of the filename
-            fclose(f_msg_id);
+
+            if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
+            {
+                FILE *f_msg_id = fopen(msgPath_msg_id, "wb");
+                fwrite(msgid2_str, 1, 1, f_msg_id); // write only the 1st byte into the file, the ID is already part of the filename
+                fclose(f_msg_id);
+            }
+
             free(msgPath_msg_id);
         }
         // save new msgid ----------
