@@ -795,6 +795,7 @@ void writeConferenceMessage(Tox *tox, const char *sender_group_key_hex, const ui
     size_t length = length_orig + 64;
     size_t len_copy = length_orig;
 
+    // TODO: this is probably wrong, and should use max size of messageV2 ?
     if (length > TOX_MAX_MESSAGE_LENGTH) {
         length = TOX_MAX_MESSAGE_LENGTH;
         len_copy = TOX_MAX_MESSAGE_LENGTH - 64;
@@ -2005,7 +2006,7 @@ static void *notification_thread_func(void *data)
 }
 
 static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer_number, TOX_MESSAGE_TYPE type,
-                                   const uint8_t *message, size_t length, void *userdata)
+                                   const uint8_t *message, size_t length, uint32_t message_id, void *userdata)
 {
     toxProxyLog(0, "received group text message group:%d peer:%d", groupnumber, peer_number);
 
@@ -2029,7 +2030,25 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             CLEAR(public_key_hex);
             bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
 
-            writeConferenceMessageHelper(tox, group_id_buffer, message, length, public_key_hex, 1);
+            // ATTENTION: !!add uint32_t message_id (as lowercase HEX) + ":" in front of the text message bytes!!
+#define HEX_MSG_NUM_LEN_COLON 9
+            uint8_t* newmsg = calloc(1, length + 1 + HEX_MSG_NUM_LEN_COLON);
+            if (!newmsg)
+            {
+                toxProxyLog(0, "error allocating buffer. this should not happen. incoming group message is lost.");
+                return;
+            }
+            memset(newmsg, 0, length + 1 + HEX_MSG_NUM_LEN_COLON);
+            uint8_t *t1 = (uint8_t *)(&(message_id));
+            uint8_t *t2 = t1 + 1;
+            uint8_t *t3 = t1 + 2;
+            uint8_t *t4 = t1 + 3;
+            sprintf((char *)newmsg, "%02x%02x%02x%02x:", *t4, *t3, *t2, *t1); // BEWARE: this adds a NULL byte at the end
+            memcpy(newmsg + HEX_MSG_NUM_LEN_COLON, message, length);
+            newmsg[length + HEX_MSG_NUM_LEN_COLON] = 0;
+
+            writeConferenceMessageHelper(tox, group_id_buffer, newmsg, (length + HEX_MSG_NUM_LEN_COLON), public_key_hex, 1);
+            free(newmsg);
         }
     }
 
@@ -2199,14 +2218,12 @@ int main(int argc, char *argv[])
     tox_callback_friend_connection_status(tox, friendlist_onConnectionChange);
 #endif
 
-/*
     tox_callback_group_message(tox, group_message_callback);
     tox_callback_group_invite(tox, group_invite_cb);
     tox_callback_group_peer_join(tox, group_peer_join_cb);
     tox_callback_group_peer_exit(tox, group_peer_exit_cb);
     tox_callback_group_self_join(tox, group_self_join_cb);
     tox_callback_group_join_fail(tox, group_join_fail_cb);
-*/
 
     updateToxSavedata(tox);
 
