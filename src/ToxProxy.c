@@ -646,23 +646,23 @@ Tox *openTox()
     if (use_tor == 0)
     {
         options.udp_enabled = true; // UDP mode
-        toxProxyLog(0, "setting UDP mode\n");
+        toxProxyLog(0, "setting UDP mode");
     }
     else
     {
         options.udp_enabled = false; // TCP mode
-        toxProxyLog(0, "setting TCP mode\n");
+        toxProxyLog(0, "setting TCP mode");
     }
 
     if (use_tor == 1)
     {
-        toxProxyLog(0, "setting Tor Relay mode\n");
+        toxProxyLog(0, "setting Tor Relay mode");
         options.udp_enabled = false; // TCP mode
-        toxProxyLog(0, "setting TCP mode\n");
+        toxProxyLog(0, "setting TCP mode");
         const char *proxy_host = "127.0.0.1";
-        toxProxyLog(0, "setting proxy_host %s\n", proxy_host);
+        toxProxyLog(0, "setting proxy_host %s", proxy_host);
         uint16_t proxy_port = PROXY_PORT_TOR_DEFAULT;
-        toxProxyLog(0, "setting proxy_port %d\n", (int)proxy_port);
+        toxProxyLog(0, "setting proxy_port %d", (int)proxy_port);
         options.proxy_type = TOX_PROXY_TYPE_SOCKS5;
         options.proxy_host = proxy_host;
         options.proxy_port = proxy_port;
@@ -767,16 +767,16 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 
             if (res != true) {
                 if (error == TOX_ERR_BOOTSTRAP_OK) {
-                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
-                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
-                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
-                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
                 }
             } else {
-              toxProxyLog(9, "bootstrap:%s %d [TRUE] res=%d\n", nodes[i].ip, nodes[i].port, res);
+              toxProxyLog(9, "bootstrap:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
             }
         }
 
@@ -786,19 +786,19 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 
             if (res != true) {
                 if (error == TOX_ERR_BOOTSTRAP_OK) {
-                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
-                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
-                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
-                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
                 }
             } else {
-              toxProxyLog(9, "add_tcp_relay:%s %d [TRUE] res=%d\n", nodes[i].ip, nodes[i].port, res);
+              toxProxyLog(9, "add_tcp_relay:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
             }
         } else {
-            toxProxyLog(2, "Not adding any TCP relays\n");
+            toxProxyLog(2, "Not adding any TCP relays");
         }
     }
 }
@@ -1959,7 +1959,7 @@ static void *notification_thread_func(void *data)
 
                         curl_easy_setopt(curl, CURLOPT_URL, buf);
                         curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
-                        // toxProxyLog(9, "get_url=%s\n", buf);
+                        // toxProxyLog(9, "get_url=%s", buf);
                         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
                         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
 
@@ -1971,7 +1971,7 @@ static void *notification_thread_func(void *data)
                         }
                         else
                         {
-                            // toxProxyLog(9, "server_answer=%s\n", s.ptr);
+                            // toxProxyLog(9, "server_answer=%s", s.ptr);
 
                             char *found = strstr((const char *)s.ptr, (const char *)"OK");
 
