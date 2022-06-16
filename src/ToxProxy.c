@@ -180,6 +180,8 @@ uint32_t tox_public_key_hex_size = 0; //initialized in main
 uint32_t tox_address_hex_size = 0; //initialized in main
 int tox_loop_running = 1;
 bool masterIsOnline = false;
+#define PROXY_PORT_TOR_DEFAULT 9050
+int use_tor = 0;
 
 pthread_t notification_thread;
 int notification_thread_stop = 1;
@@ -641,6 +643,35 @@ Tox *openTox()
     options.tcp_port = 0; // disable tcp relay function!
     // ----- set options ------
 
+    if (use_tor == 0)
+    {
+        options.udp_enabled = true; // UDP mode
+        toxProxyLog(0, "setting UDP mode\n");
+    }
+    else
+    {
+        options.udp_enabled = false; // TCP mode
+        toxProxyLog(0, "setting TCP mode\n");
+    }
+
+    if (use_tor == 1)
+    {
+        toxProxyLog(0, "setting Tor Relay mode\n");
+        options.udp_enabled = false; // TCP mode
+        toxProxyLog(0, "setting TCP mode\n");
+        const char *proxy_host = "127.0.0.1";
+        toxProxyLog(0, "setting proxy_host %s\n", proxy_host);
+        uint16_t proxy_port = PROXY_PORT_TOR_DEFAULT;
+        toxProxyLog(0, "setting proxy_port %d\n", (int)proxy_port);
+        options.proxy_type = TOX_PROXY_TYPE_SOCKS5;
+        options.proxy_host = proxy_host;
+        options.proxy_port = proxy_port;
+    }
+    else
+    {
+        options.proxy_type = TOX_PROXY_TYPE_NONE;
+    }
+
     // set our own handler for c-toxcore logging messages!!
     options.log_callback = tox_log_cb__custom;
 
@@ -728,41 +759,46 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
         bool res = sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
                                   nodes[i].key_hex, sizeof(nodes[i].key_hex) - 1, NULL, NULL, NULL);
         toxProxyLog(99, "bootstap_nodes - sodium_hex2bin:res=%d", res);
-        TOX_ERR_BOOTSTRAP error;
-        res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
 
-        if (res != true) {
-            if (error == TOX_ERR_BOOTSTRAP_OK) {
-//              toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
-            } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
-//              toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
-            } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
-//              toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
-            } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
-//              toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+        if (use_tor == 0)
+        {
+            TOX_ERR_BOOTSTRAP error;
+            res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
+
+            if (res != true) {
+                if (error == TOX_ERR_BOOTSTRAP_OK) {
+                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+                } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
+                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+                } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
+                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+                } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
+                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+                }
+            } else {
+              toxProxyLog(9, "bootstrap:%s %d [TRUE] res=%d\n", nodes[i].ip, nodes[i].port, res);
             }
-        } else {
-//          toxProxyLog(9, "bootstrap:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
         }
 
         if (add_as_tcp_relay == 1) {
+            TOX_ERR_BOOTSTRAP error;
             res = tox_add_tcp_relay(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error); // use also as TCP relay
 
             if (res != true) {
                 if (error == TOX_ERR_BOOTSTRAP_OK) {
-//                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK\n", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
-//                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL\n", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
-//                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST\n", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
-//                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT\n", nodes[i].ip, nodes[i].port);
                 }
             } else {
-//              toxProxyLog(9, "add_tcp_relay:%s %d [TRUE]res=%d\n", nodes[i].ip, nodes[i].port, res);
+              toxProxyLog(9, "add_tcp_relay:%s %d [TRUE] res=%d\n", nodes[i].ip, nodes[i].port, res);
             }
         } else {
-//            toxProxyLog(2, "Not adding any TCP relays\n");
+            toxProxyLog(2, "Not adding any TCP relays\n");
         }
     }
 }
@@ -2154,8 +2190,6 @@ int main(int argc, char *argv[])
 {
     openLogFile();
 
-    mkdir("db", S_IRWXU);
-
     // ---- test ASAN ----
     // char *x = (char*)malloc(10 * sizeof(char*));
     // free(x);
@@ -2164,6 +2198,83 @@ int main(int argc, char *argv[])
 
     fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
     toxProxyLog(2, "ToxProxy version: %s", global_version_string);
+
+    use_tor = 0;
+    int opt;
+    const char     *short_opt = "T";
+    struct option   long_opt[] =
+    {
+        {"help",          no_argument,       NULL, 'h'},
+        {"version",       no_argument,       NULL, 'v'},
+        {NULL,            0,                 NULL,  0 }
+    };
+
+
+    while ((opt = getopt_long(argc, argv, short_opt, long_opt, NULL)) != -1)
+    {
+        switch (opt)
+        {
+            case -1:       /* no more arguments */
+            case 0:        /* long options toggles */
+                break;
+
+            case 'T':
+                use_tor = 1;
+                break;
+
+            case 'v':
+                printf("ToxProxy version: %s\n", global_version_string);
+
+                if (logfile)
+                {
+                    fclose(logfile);
+                    logfile = NULL;
+                }
+
+                return (0);
+
+            case 'h':
+                printf("Usage: %s [OPTIONS]\n", argv[0]);
+                printf("  -T,                                  use TOR as Relay\n");
+                printf("  -v, --version                        show version\n");
+                printf("  -h, --help                           print this help and exit\n");
+                printf("\n");
+
+                if (logfile)
+                {
+                    fclose(logfile);
+                    logfile = NULL;
+                }
+
+                return (0);
+
+            case ':':
+            case '?':
+                fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+
+                if (logfile)
+                {
+                    fclose(logfile);
+                    logfile = NULL;
+                }
+
+                return (-2);
+
+            default:
+                fprintf(stderr, "%s: invalid option -- %c\n", argv[0], opt);
+                fprintf(stderr, "Try `%s --help' for more information.\n", argv[0]);
+
+                if (logfile)
+                {
+                    fclose(logfile);
+                    logfile = NULL;
+                }
+
+                return (-2);
+        }
+    }
+
+    mkdir("db", S_IRWXU);
 
     read_token_from_file();
 
