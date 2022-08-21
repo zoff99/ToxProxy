@@ -28,8 +28,8 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 11
-static const char global_version_string[] = "0.99.11";
+#define VERSION_PATCH 12
+static const char global_version_string[] = "0.99.12";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -174,7 +174,8 @@ uint32_t my_last_online_ts = 0;
 #define BOOTSTRAP_AFTER_OFFLINE_SECS 30
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 
-#define MAX_FILES_IN_ONE_MESSAGE_DIR 200
+#define MAX_FILES_IN_ONE_MESSAGE_DIR 2000 // limit MSG files per directory
+#define MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR 2000 // limit ACK files per directory
 
 uint32_t tox_public_key_hex_size = 0; //initialized in main
 uint32_t tox_address_hex_size = 0; //initialized in main
@@ -996,15 +997,15 @@ void writeConferenceMessage(Tox *tox, const char *sender_group_key_hex, const ui
     strcat(msgPath, timestamp);
     strcat(msgPath, ".txtS");
 
-    if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
-    {
+    //if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
+    // {
         FILE *f = fopen(msgPath, "wb");
 
         if (f) {
             fwrite(raw_message_data, raw_message_len, 1, f);
             fclose(f);
         }
-    }
+    //}
 
     if (is_group != 1)
     {
@@ -1024,7 +1025,10 @@ void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, u
 
     uint8_t *msg_id = calloc(1, tox_public_key_size());
     tox_messagev2_get_message_id(message, msg_id);
-    toxProxyLog(2, "New message from %s msg_type=%d", sender_key_hex, msg_type);
+    char msg_id_str[tox_public_key_hex_size + 1];
+    CLEAR(msg_id_str);
+    bin2upHex(msg_id, tox_public_key_size(), msg_id_str, tox_public_key_hex_size);
+    toxProxyLog(2, "New message from %s msg_type=%d msg_id=%s", sender_key_hex, msg_type, msg_id_str);
 
     char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
     CLEAR(userDir);
@@ -1052,21 +1056,24 @@ void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, u
     strcat(msgPath, "/");
     strcat(msgPath, timestamp);
 
+    int max_files = MAX_FILES_IN_ONE_MESSAGE_DIR;
+
     if (msg_type == TOX_FILE_KIND_MESSAGEV2_ANSWER) {
         strcat(msgPath, ".txtA");
+        max_files = MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR;
     } else if (msg_type == TOX_FILE_KIND_MESSAGEV2_SEND) {
         strcat(msgPath, ".txtS");
     }
 
-    if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
-    {
+    //if (count_file_in_dir(userDir) < max_files)
+    //{
         FILE *f = fopen(msgPath, "wb");
 
         if (f) {
             fwrite(message, length, 1, f);
             fclose(f);
         }
-    }
+    //}
 
     if (ping_push_service() == 1)
     {
@@ -1484,9 +1491,12 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                 if (strncmp(dp_m->d_name, ".", 1) != 0 && strncmp(dp_m->d_name, "..", 2) != 0)
                 {
                     // ****************************************
+                    toxProxyLog(2, "is_answer_to_synced_message: looping file:001:%s", dp_m->d_name);
 
                     char *friendDir = calloc(1, strlen(msgsDir) + 1 + strlen(dp_m->d_name) + 1);
                     sprintf(friendDir, "%s/%s", msgsDir, dp_m->d_name);
+
+                    toxProxyLog(2, "is_answer_to_synced_message: looping file:002:%s", friendDir);
 
                     mkdir(msgsDir, S_IRWXU);
                     DIR *dfd = opendir(friendDir);
@@ -1508,13 +1518,21 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                         {
                             if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0)
                             {
+                                toxProxyLog(2, "is_answer_to_synced_message: looping file:003:%s", dp->d_name);
+
                                 int len = strlen(dp->d_name);
                                 const char *last_char = &dp->d_name[len - 1];
                                 if (strncmp(last_char, "_", 1) == 0)
                                 {
+                                    toxProxyLog(2, "is_answer_to_synced_message: looping file:004:%s", last_char);
+
                                     const char *last_char2 = &dp->d_name[len - END_PART_GLOB_LEN];
                                     char *comp_str = calloc(1, (END_PART_GLOB_LEN + 2));
                                     sprintf(comp_str, "__%s__", msgid2_str);
+
+                                    toxProxyLog(2, "is_answer_to_synced_message: looping file:005:%s", last_char2);
+
+                                    toxProxyLog(2, "is_answer_to_synced_message: looping file:006:%s END_PART_GLOB_LEN=%d", comp_str, (int)END_PART_GLOB_LEN);
 
                                     if (strncmp(last_char2, comp_str, END_PART_GLOB_LEN) == 0)
                                     {
@@ -1561,7 +1579,11 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
 
 void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_t ts_sec, const uint8_t *msgid)
 {
-    toxProxyLog(9, "enter friend_read_receipt_message_v2_cb");
+    char msgid2_str[tox_public_key_hex_size + 1];
+    CLEAR(msgid2_str);
+    bin2upHex(msgid, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
+
+    toxProxyLog(9, "enter friend_read_receipt_message_v2_cb:msgid=%s", msgid2_str);
 
 	// check if the received msg is confirm conference msg received
 	// also: make long enough pauses in sending messages to master to allow for receipt msgs to come in and get processed.
@@ -1583,10 +1605,13 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     }
     else
     {
+        toxProxyLog(9, "friend_read_receipt_message_v2_cb:call writeMessageHelper");
         writeMessageHelper(tox, friend_number, raw_message_data, raw_message_len, TOX_FILE_KIND_MESSAGEV2_ANSWER);
     }
 
 #endif
+
+    free(raw_message_data);
 
 }
 
@@ -1638,6 +1663,12 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             {
                 uint8_t *msgid_acked = calloc(1, TOX_PUBLIC_KEY_SIZE);
                 memcpy(msgid_acked, raw_message, TOX_PUBLIC_KEY_SIZE);
+
+                char msgid_acked_str[tox_public_key_hex_size + 1];
+                CLEAR(msgid_acked_str);
+                bin2upHex(msgid_acked, tox_public_key_size(), msgid_acked_str, tox_public_key_hex_size);
+                toxProxyLog(9, "friend_message_v2_cb:msgid_acked=%s", msgid_acked_str);
+
                 tox_util_friend_send_msg_receipt_v2(tox, friend_number, msgid_acked, 0);
             }
         }
@@ -1745,8 +1776,11 @@ void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
         uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
         uint8_t *pubKeyBin = tox_address_hex_string_to_bin2(pubKeyHex);
 
+        int max_files = MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR;
+
         if (msgFileName[strlen(msgFileName) - 1] == 'A') {
             // TOX_FILE_KIND_MESSAGEV2_ANSWER
+            max_files = MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR;
             tox_messagev2_sync_wrap(fsize, pubKeyBin, TOX_FILE_KIND_MESSAGEV2_ANSWER,
                                     rawMsgData, 665, 987, raw_message2, msgid2);
             toxProxyLog(9, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_ANSWER", raw_message2);
@@ -1761,18 +1795,24 @@ void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
         CLEAR(msgid2_str);
         bin2upHex(msgid2, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
 
+        char msgid_orig_str[tox_public_key_hex_size + 1];
+        CLEAR(msgid_orig_str);
+        bin2upHex(rawMsgData, tox_public_key_size(), msgid_orig_str, tox_public_key_hex_size);
+
+        toxProxyLog(9, "send_sync_msg_single:msgid2=%s msgid_orig=%s", msgid2_str, msgid_orig_str);
+
         char *msgPath_msg_id = calloc(1, 1000);
         if (msgPath_msg_id)
         {
             sprintf(msgPath_msg_id, "%s__%s__", msgPath, msgid2_str);
             toxProxyLog(9, "send_sync_msg_single: writing new msg_id to file: %s", msgPath_msg_id);
 
-            if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
-            {
+            //if (count_file_in_dir(userDir) < max_files)
+            //{
                 FILE *f_msg_id = fopen(msgPath_msg_id, "wb");
-                fwrite(msgid2_str, 1, 1, f_msg_id); // write only the 1st byte into the file, the ID is already part of the filename
+                fwrite(msgid_orig_str, tox_public_key_size(), 1, f_msg_id); // write the original msg_id into the file
                 fclose(f_msg_id);
-            }
+            //}
 
             free(msgPath_msg_id);
         }
