@@ -50,14 +50,13 @@ fi
 
 # build toxcore -------------
 
-if [ "$1""x" == "1x" ]; then
+if [ "$1""x" != "1x" ]; then
 
     cd $_SRC_
     rm -Rf ./c-toxcore/
     git clone https://github.com/zoff99/c-toxcore
     cd c-toxcore/
     git checkout "zoff99/zoxcore_local_fork"
-
 
     export CFLAGS=" -DMIN_LOGGER_LEVEL=LOGGER_LEVEL_INFO -D_GNU_SOURCE -g -O3 -I$_INST_/include/ -fPIC -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-unused-variable -Wno-unused-but-set-variable "
     export LDFLAGS=" -O3 -L$_INST_/lib -fPIC "
@@ -71,7 +70,7 @@ if [ "$1""x" == "1x" ]; then
 
 fi
 
-# build toxic -------------
+# build toxproxy -------------
 
 cd $_HOME_
 cd src/
