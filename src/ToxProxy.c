@@ -787,13 +787,13 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 
             if (res != true) {
                 if (error == TOX_ERR_BOOTSTRAP_OK) {
-                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
-                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
-                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
-                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
+                  toxProxyLog(9, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
                 }
             } else {
               toxProxyLog(9, "add_tcp_relay:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
