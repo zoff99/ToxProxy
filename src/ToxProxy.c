@@ -107,7 +107,7 @@ static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
 #define NOTIFICATION_METHOD_HTTP 2
 #define NOTIFICATION_METHOD_GOTIFY_UP 3
 
-#define NOTIFICATION_METHOD NOTIFICATION_METHOD_GOTIFY_UP
+#define NOTIFICATION_METHOD NOTIFICATION_METHOD_HTTP
 
 #if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
     #include "push_server_config.h"
@@ -567,6 +567,7 @@ SizedSavedata dbSavedataAction(bool putData, const uint8_t *savedata, size_t sav
 }
 #endif
 
+#if 0
 static uint64_t count_file_in_dir(char *dir)
 {
     struct dirent *dp = NULL;
@@ -587,6 +588,7 @@ static uint64_t count_file_in_dir(char *dir)
 
     return count;
 }
+#endif
 
 void updateToxSavedata(const Tox *tox)
 {
