@@ -1,7 +1,7 @@
 #ifndef C_PUSH_SERVER_CONFIG_H
 #define C_PUSH_SERVER_CONFIG_H
 
-#define PUSH__DST_PORT 888
+#define PUSH__DST_PORT 1234
 #define PUSH__DST_HOST "127.0.0.1"
 #define PUSH__MAXDATASIZE 200
 
