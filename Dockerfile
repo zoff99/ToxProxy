@@ -37,62 +37,22 @@ ENV _SRC_ /home/pi/src
 
 RUN apt-get update && \
             apt-get install -y --force-yes --no-install-recommends \
-            clang \
-            cmake \
-            libconfig-dev \
-            libgtest-dev \
             pkg-config \
-            zip grep file ca-certificates autotools-dev autoconf automake \
-            git bc wget rsync make pkg-config libtool \
+            gcc libc6-dev \
+            libcurl4-gnutls-dev \
+            zip grep file ca-certificates \
+            bc wget rsync \
             ssh gzip tar unzip \
             coreutils && \
             apt-get install -y --force-yes --no-install-recommends \
-            libsodium-dev \
-            libx264-dev \
-            libavcodec-dev \
-            libavutil-dev \
-            libvpx-dev \
-            libopus-dev \
-            libsqlite3-dev \
-            sqlite3
-
-RUN         mkdir -p "$_INST_" ; mkdir -p "$_SRC_" ; \
-            cd "$_SRC_" ; \
-            git clone https://github.com/zoff99/c-toxcore
-
-RUN         cd "$_SRC_"/c-toxcore/ ; \
-            git checkout zoff99/zoxcore_local_fork
-
-RUN         cd "$_SRC_"/c-toxcore/ ; \
-            git checkout 5e5c6ad18092b3d73cc5cc8643ddb18adb659a72 || echo "commit seems gone, using latest commit"
-
-RUN         cd "$_SRC_"/c-toxcore/ ; \
-            ./autogen.sh ; \
-            export CFLAGS_=" -D_GNU_SOURCE -I$_INST_/include/ -O3 -g -fstack-protector-all " ; \
-            export CFLAGS="$CFLAGS_" ; \
-            export LDFLAGS="-L$_INST_/lib" ; \
-            ./configure \
-                --prefix=$_INST_ \
-                --disable-soname-versions --disable-testing --disable-shared
-
-RUN         cd "$_SRC_"/c-toxcore/ ; \
-            make -j$(nproc) || exit 1
-
-RUN         cd "$_SRC_"/c-toxcore/ ; make install
+            libsodium-dev
 
 RUN         cd /home/pi/src/ ; \
-            export CFLAGS=" -Wall -Wextra -Wno-unused-parameter -flto -fPIC -std=gnu99 -I$_INST_/include/ -L$_INST_/lib -O3 -g -fstack-protector-all " ; \
+            export CFLAGS=" -Wall -Wextra -Wno-unused-parameter -flto -fPIC -std=gnu99 -O3 -g -fstack-protector-all " ; \
             gcc $CFLAGS \
                 ToxProxy.c \
-                $_INST_/lib/libtoxcore.a \
-                $_INST_/lib/libtoxav.a \
-                $_INST_/lib/libtoxencryptsave.a \
-                -l:libopus.a \
-                -l:libvpx.a \
-                -l:libx264.a \
-                -l:libavcodec.a \
-                -l:libavutil.a \
                 -l:libsodium.a \
+                -lcurl \
                 -lm \
                 -ldl \
                 -lpthread \

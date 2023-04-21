@@ -24,51 +24,13 @@ export LD_LIBRARY_PATH=$_INST_/lib/
 export PKG_CONFIG_PATH=$_INST_/lib/pkgconfig
 
 
-if [ 1 ==  2 ]; then
+if [ 1 == 2 ]; then
+    sudo apt-get -y install libsodium-dev
 
-sudo apt-get -y install cmake
-sudo apt-get -y install ffmpeg
-sudo apt-get -y install libavcodec-dev
-sudo apt-get -y install libavdevice-dev
-sudo apt-get -y install libexif-dev
-sudo apt-get -y install libsodium-dev
-sudo apt-get -y install libsqlcipher-dev
-sudo apt-get -y install libvpx-dev
-sudo apt-get -y install libxv-dev libvdpau-dev libxcb-shm0-dev
-sudo apt-get -y install libxv-dev libvdpau-dev libxcb-shm0-dev
-sudo apt-get -y install libva-dev
-sudo apt-get -y install libopus-dev libvpx-dev
-sudo apt-get -y install libopus-dev libx264-dev
-sudo apt-get -y install libopus-dev libsodium-dev
-
-sudo apt-get -y install libncursesw5-dev
-sudo apt-get -y install libcurl4-gnutls-dev
-
-
+    sudo apt-get -y install libncursesw5-dev
+    sudo apt-get -y install libcurl4-gnutls-dev
 fi
 
-
-# build toxcore -------------
-
-if [ "$1""x" != "1x" ]; then
-
-    cd $_SRC_
-    rm -Rf ./c-toxcore/
-    git clone https://github.com/zoff99/c-toxcore
-    cd c-toxcore/
-    git checkout "zoff99/zoxcore_local_fork"
-
-    export CFLAGS=" -DMIN_LOGGER_LEVEL=LOGGER_LEVEL_INFO -D_GNU_SOURCE -g -O3 -I$_INST_/include/ -fPIC -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-unused-variable -Wno-unused-but-set-variable "
-    export LDFLAGS=" -O3 -L$_INST_/lib -fPIC "
-    ./autogen.sh
-    ./configure \
-      --prefix=$_INST_ \
-      --disable-soname-versions --disable-testing --enable-logging --disable-shared
-
-    make -j $(nproc) || exit 1
-    make install
-
-fi
 
 # build toxproxy -------------
 
@@ -208,23 +170,7 @@ add_flag -Wno-pointer-sign
 add_flag -Werror
 add_flag -fdiagnostics-color=always
 
-
-
-export CFLAGS=" -fPIC -std=gnu99 -I$_INST_/include/ -L$_INST_/lib -O3 -g -fstack-protector-all "
-
-clang-10 $CFLAGS \
-ToxProxy.c \
-$_INST_/lib/libtoxcore.a \
--lopus \
--lvpx \
--lx264 \
--lavcodec \
--lavutil \
--lsodium \
--lm \
--lcurl \
--lpthread \
--o ToxProxy
+gcc -O3 -g -fstack-protector-all -fPIC ToxProxy.c $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
 
 # -l:libsodium.a \
 
