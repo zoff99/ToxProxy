@@ -2,7 +2,7 @@
  ============================================================================
  Name        : ToxProxy.c
  Authors     : Thomas Käfer, Zoff
- Copyright   : 2019 - 2022
+ Copyright   : 2019 - 2023
 
 Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und richtig angezeigt.
 
@@ -22,19 +22,25 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
  ============================================================================
  */
 
+/*
+
+ linux compile:
+
+ gcc -O3 -fPIC ToxProxy.c $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
+
+*/
+
+
 #define _GNU_SOURCE
 
 // ----------- version -----------
 // ----------- version -----------
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 99
-#define VERSION_PATCH 13
-static const char global_version_string[] = "0.99.13";
+#define VERSION_PATCH 14
+static const char global_version_string[] = "0.99.14";
 // ----------- version -----------
 // ----------- version -----------
-
-// define this to use savedata file instead of included in sqlite
-#define USE_SEPARATE_SAVEDATA_FILE
 
 // define this to write my own tox id to a text file
 #define WRITE_MY_TOXID_TO_FILE
@@ -68,25 +74,11 @@ static const char global_version_string[] = "0.99.13";
 #include <netdb.h>
 #include <netinet/in.h>
 
-
 #include <pthread.h>
 
 #include <semaphore.h>
 #include <signal.h>
 #include <linux/sched.h>
-
-// gives bin2hex & hex2bin functions for Tox-ID / public-key conversions
-#include <sodium/utils.h>
-
-// tox core
-#include <tox/tox.h>
-
-#undef TOX_HAVE_TOXUTIL
-#define TOX_HAVE_TOXUTIL 1
-
-#ifdef TOX_HAVE_TOXUTIL
-#include <tox/toxutil.h>
-#endif
 
 // timestamps for printf output
 #include <time.h>
@@ -96,6 +88,17 @@ static const char global_version_string[] = "0.99.13";
 #include <sys/stat.h>
 #include <sys/types.h>
 
+// gives bin2hex & hex2bin functions for Tox-ID / public-key conversions
+#include <sodium/utils.h>
+
+// define this before including toxcore amalgamation -------
+#define MIN_LOGGER_LEVEL LOGGER_LEVEL_INFO
+// define this before including toxcore amalgamation -------
+
+// include toxcore amalgamation no ToxAV --------
+#include "toxcore_amalgamation_no_toxav.c"
+// include toxcore amalgamation no ToxAV --------
+
 static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
 
@@ -103,24 +106,9 @@ static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
 #define NOTI__device_token_max_len 300
 
 #define NOTIFICATION_METHOD_NONE 0
-#define NOTIFICATION_METHOD_TCP  1
-#define NOTIFICATION_METHOD_HTTP 2
 #define NOTIFICATION_METHOD_GOTIFY_UP 3
 
 #define NOTIFICATION_METHOD NOTIFICATION_METHOD_GOTIFY_UP
-
-#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
-    #include "push_server_config.h"
-#else
-    #define PUSH__DST_PORT 1234
-    #define PUSH__DST_HOST "127.0.0.1"
-    #define PUSH__MAXDATASIZE 200
-    #define HTTP_PUSH__DST_URL "https://127.0.0.1/notify"
-#endif
-
-#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP
-#include <curl/curl.h>
-#endif
 
 #if NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP
 #include <curl/curl.h>
@@ -152,10 +140,10 @@ FILE *logfile = NULL;
 const char *log_filename = "toxblinkenwall.log";
 #endif
 
-#ifdef USE_SEPARATE_SAVEDATA_FILE
+const char *save_dir = "./db";
+
 const char *savedata_filename = "./db/savedata.tox";
 const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
-#endif
 
 const char *empty_log_message = "empty log message received!";
 const char *msgsDir = "./messages";
@@ -188,7 +176,11 @@ pthread_t notification_thread;
 int notification_thread_stop = 1;
 int need_send_notification = 0;
 
+
+// functions defs ------------
 int ping_push_service();
+// functions defs ------------
+
 
 void openLogFile()
 {
@@ -376,9 +368,7 @@ void killSwitch() __attribute__((noreturn));
 void killSwitch()
 {
     toxProxyLog(2, "got killSwitch command, deleting all data");
-#ifdef USE_SEPARATE_SAVEDATA_FILE
     unlink(savedata_filename);
-#endif
     unlink(masterFile);
     unlink(tokenFile);
     toxProxyLog(1, "todo implement deleting messages");
@@ -394,218 +384,17 @@ void sigint_handler(int signo)
     }
 }
 
-
-#ifndef USE_SEPARATE_SAVEDATA_FILE
-// https://www.tutorialspoint.com/sqlite/sqlite_c_cpp
-#include <sqlite3.h>
-
-const char *database_filename = "ToxProxy.db";
-
-void dbInsertMsg()
-{
-    sqlite3 *db;
-    sqlite3_stmt *stmt;
-    char *sql = \
-                "CREATE TABLE IF NOT EXISTS Messages(" \
-                "id INTEGER PRIMARY KEY AUTOINCREMENT" \
-                ",received DATETIME" \
-                ",forwarded DATETIME" \
-                ",confirmation_received DATETIME" \
-                ",rawMsg BLOB NOT NULL);";
-}
-
-void sqlite_createSaveDataTable(sqlite3 *db)
-{
-
-    const char *sql = \
-                      "CREATE TABLE ToxCoreSaveData(" \
-                      "id INTEGER PRIMARY KEY," \
-                      "data BLOB NOT NULL);";
-
-    sqlite3_stmt *stmt;
-    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
-
-    if (rc != SQLITE_OK) {
-        toxProxyLog(0, "sqlite_createSaveDataTable - Failed to prepare create tbl stmt: %s", sqlite3_errmsg(db));
-        sqlite3_close(db);
-        exit(1);
-    }
-
-    rc = sqlite3_step(stmt);
-    toxProxyLog(9, "sqlite_createSaveDataTable rc of step = %d", rc);
-    rc = sqlite3_finalize(stmt);
-    toxProxyLog(9, "sqlite_createSaveDataTable rc of finalize = %d", rc);
-}
-
-
-typedef struct SizedSavedata {
-    const uint8_t *savedata;
-    size_t savedataSize;
-    sqlite3 *db;
-    sqlite3_stmt *stmt;
-} SizedSavedata;
-
-SizedSavedata dbSavedataAction(bool putData, const uint8_t *savedata, size_t savedataSize)
-{
-    sqlite3 *db;
-    sqlite3_stmt *stmt;
-    char *sql = "SELECT COUNT(*) FROM ToxCoreSaveData";
-    int rowCount = -1;
-
-    int rc = sqlite3_open(database_filename, &db);
-
-    if (rc != SQLITE_OK) {
-        toxProxyLog(0, "dbSavedataAction - Cannot open database: %s", sqlite3_errmsg(db));
-        sqlite3_close(db);
-        exit(1);
-    }
-
-    sqlite3_busy_timeout(db, 2000);
-
-    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
-
-    if (rc != SQLITE_OK) {
-        const char *errorMsg = sqlite3_errmsg(db);
-
-        if (strncmp("no such table: ToxCoreSaveData", errorMsg, 30) == 0) {
-            toxProxyLog(1, "dbSavedataAction - savedata table doesn't exist (first run?), create if it data insertion is planned!");
-            sqlite_createSaveDataTable(db);
-            rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
-
-            if (rc != SQLITE_OK) {
-                toxProxyLog(0, "dbSavedataAction - Failed to prepare row count data stmt even after creating table. errormsg: %s",
-                            sqlite3_errmsg(db));
-                sqlite3_close(db);
-                exit(1);
-            }
-        } else {
-            toxProxyLog(0, "dbSavedataAction - Failed to prepare row count data stmt: %s", errorMsg);
-            sqlite3_close(db);
-            exit(1);
-        }
-
-    }
-
-    rc = sqlite3_step(stmt);
-
-    if (rc == SQLITE_ROW) {
-        rowCount = sqlite3_column_int(stmt, 0);
-        toxProxyLog(9, "dbSavedataAction received count result: %d", rowCount); //, sqlite3_column_text(stmt, 0));
-    } else {
-        toxProxyLog(0, "dbSavedataAction received something different than a count result. rc = %d, error = %s", rc,
-                    sqlite3_errmsg(db));
-        exit(1);
-    }
-
-    rc = sqlite3_finalize(stmt);
-    toxProxyLog(9, "dbSavedataAction rc of rowcount stmt finalize = %d", rc);
-
-    if (!(rowCount == 0 || rowCount == 1)) {
-        toxProxyLog(0, "dbSavedataAction failed because rowCount is unexpected: %d", rowCount);
-        sqlite3_close(db);
-        exit(1);
-    }
-
-    if (putData) {
-        if (rowCount == 0) {
-            sql = "INSERT INTO ToxCoreSaveData(data) VALUES(?)";
-        } else {
-            sql = "UPDATE ToxCoreSaveData SET data = ?";
-        }
-    } else {
-        if (rowCount == 0) {
-            toxProxyLog(1, "dbSavedataAction: can't load data because savedata table is empty (first run!).");
-            sqlite3_close(db);
-            SizedSavedata empty = {NULL, 0, NULL, NULL};
-            return empty;
-        } else {
-            sql = "SELECT data FROM ToxCoreSaveData";
-        }
-    }
-
-    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
-
-    if (rc != SQLITE_OK) {
-        toxProxyLog(0, "dbSavedataAction - Failed to prepare savedata insert/update/select stmt: %s", sqlite3_errmsg(db));
-        sqlite3_close(db);
-        exit(1);
-    }
-
-    if (putData) {
-        rc = sqlite3_bind_blob(stmt, 1, savedata, savedataSize, SQLITE_STATIC);
-
-        if (rc != SQLITE_OK) {
-            toxProxyLog(0, "sqlite3 insert savedata - bind failed: %s", sqlite3_errmsg(db));
-        } else {
-            rc = sqlite3_step(stmt);
-
-            if (rc != SQLITE_DONE) {
-                toxProxyLog(0, "sqlite3 insert savedata - execution failed: %s", sqlite3_errmsg(db));
-            }
-        }
-    } else {
-        rc = sqlite3_step(stmt);
-
-        if (rc == SQLITE_ROW) {
-            savedataSize = sqlite3_column_bytes(stmt, 0);
-            savedata = sqlite3_column_blob(stmt,
-                                           0); //gives "discards 'const' qualifier"-warning but works. maybe Zoff can suggest improvement?
-            SizedSavedata data = {savedata, savedataSize, db, stmt};
-            return data;
-        } else {
-            toxProxyLog(0,
-                        "dbSavedataAction select savedata received something different than the expected blob. rc = %d, error = %s", rc,
-                        sqlite3_errmsg(db));
-            sqlite3_close(db);
-            exit(1);
-        }
-    }
-
-    sqlite3_close(db);
-    SizedSavedata empty = {NULL, 0, NULL, NULL};
-    return empty;
-}
-#endif
-
-#if 0
-static uint64_t count_file_in_dir(char *dir)
-{
-    struct dirent *dp = NULL;
-    DIR *fd = NULL;
-    uint64_t count = 0;
-
-    if ((fd = opendir(dir)) == NULL) {
-        return 0;
-    }
-
-    while ((dp = readdir(fd)) != NULL) {
-        if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, "..")) {
-            continue; /* skip self and parent */
-        }
-        count++;
-    }
-    closedir(fd);
-
-    return count;
-}
-#endif
-
 void updateToxSavedata(const Tox *tox)
 {
     size_t size = tox_get_savedata_size(tox);
     uint8_t *savedata = calloc(1, size);
     tox_get_savedata(tox, savedata);
 
-#ifdef USE_SEPARATE_SAVEDATA_FILE
     FILE *f = fopen(savedata_tmp_filename, "wb");
     fwrite(savedata, size, 1, f);
     fclose(f);
 
     rename(savedata_tmp_filename, savedata_filename);
-#else
-    dbSavedataAction(true, savedata, size);
-#endif
-
     free(savedata);
 }
 
@@ -678,7 +467,6 @@ Tox *openTox()
     // set our own handler for c-toxcore logging messages!!
     options.log_callback = tox_log_cb__custom;
 
-#ifdef USE_SEPARATE_SAVEDATA_FILE
     FILE *f = fopen(savedata_filename, "rb");
     uint8_t *savedata = NULL;
 
@@ -702,29 +490,13 @@ Tox *openTox()
         options.savedata_length = savedataSize;
     }
 
-#else
-    SizedSavedata ssd = dbSavedataAction(false, NULL, 0);
-
-    if (ssd.savedataSize != 0) {
-        options.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
-        options.savedata_data = ssd.savedata;
-        options.savedata_length = ssd.savedataSize;
-    }
-
-#endif
-
 #ifdef TOX_HAVE_TOXUTIL
     tox = tox_utils_new(&options, NULL);
 #else
     tox = tox_new(&options, NULL);
 #endif
 
-#ifdef USE_SEPARATE_SAVEDATA_FILE
     free(savedata);
-#else
-    sqlite3_finalize(ssd.stmt);
-    sqlite3_close(ssd.db);
-#endif
     return tox;
 }
 
@@ -1541,7 +1313,11 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                                         toxProxyLog(2, "is_answer_to_synced_message: found id %s in %s", comp_str, dp->d_name);
                                         // now delete all files for that id
                                         char *delete_file_glob = calloc(1, 1000);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
                                         int ret_snprintf = snprintf(delete_file_glob, BASE_NAME_GLOB_LEN, "%s", dp->d_name);
+#pragma GCC diagnostic pop
                                         if (ret_snprintf){}
                                         char *run_cmd = calloc(1, 1000);
                                         sprintf(run_cmd, "rm %s/%s*", friendDir, delete_file_glob);
@@ -1959,87 +1735,7 @@ int ping_push_service()
         return 1;
     }
 
-
-    if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_TCP)
-    {
-        toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD TCP");
-        int sockfd = 0;
-        int numbytes = 0;
-        char buf[PUSH__MAXDATASIZE + 1];
-        struct hostent *he = NULL;
-        struct sockaddr_in their_addr;
-
-        memset(buf, 0, (PUSH__MAXDATASIZE + 1));
-
-        if ((he = gethostbyname(PUSH__DST_HOST)) == NULL)
-        {
-            toxProxyLog(9, "ping_push_service:gethostbyname");
-            return 1;
-        }
-
-        if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-        {
-            toxProxyLog(9, "ping_push_service:socket");
-            return 1;
-        }
-
-        their_addr.sin_family = AF_INET;
-        their_addr.sin_port = htons(PUSH__DST_PORT);
-        their_addr.sin_addr = *((struct in_addr *)he->h_addr);
-        memset(&(their_addr.sin_zero), 0, 8);
-
-        if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
-        {
-            toxProxyLog(9, "ping_push_service:connect");
-            close(sockfd);
-            return 1;
-        }
-
-        if (send(sockfd, NOTIFICATION__device_token, strlen(NOTIFICATION__device_token), 0) == -1)
-        {
-            toxProxyLog(9, "ping_push_service:send");
-            close(sockfd);
-            return 1;
-        }
-
-        if ((numbytes = recv(sockfd, buf, PUSH__MAXDATASIZE, 0)) == -1)
-        {
-            toxProxyLog(9, "ping_push_service:recv");
-            close(sockfd);
-            return 1;
-        }
-
-        close(sockfd);
-
-        if (numbytes > 2)
-        {
-            toxProxyLog(9, "ping_push_service:PING sent:result=%c%c %d %d", (char)buf[0], (char)buf[1], (int)buf[0], (int)buf[1]);
-
-            // '79' '75' -> 'OK'
-            if (((int)buf[0] == 79) && ((int)buf[1] == 75))
-            {
-                toxProxyLog(9, "ping_push_service:PING sent:result=OK.");
-                return 0;
-            }
-            else
-            {
-                toxProxyLog(9, "ping_push_service:PING sent:result=ERR01.");
-                return 1;
-            }
-        }
-        else
-        {
-            toxProxyLog(9, "ping_push_service:PING sent:result=ERR02.");
-            return 1;
-        }
-    }
-    else if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP)
-    {
-        toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD HTTP");
-        need_send_notification = 1;
-        return 1;
-    }
-    else if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+    if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
     {
         toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
         need_send_notification = 1;
@@ -2064,67 +1760,7 @@ static void *notification_thread_func(void *data)
             }
             else
             {
-                if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP)
-                {
-                    toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD HTTP");
-                    int result = 1;
-                    CURL *curl = NULL;
-                    CURLcode res = 0;
-
-                    size_t max_buf_len = strlen(HTTP_PUSH__DST_URL) + strlen(NOTIFICATION__device_token) + 1;
-
-                    char buf[max_buf_len + 1];
-                    memset(buf, 0, max_buf_len + 1);
-                    snprintf(buf, max_buf_len, "%s%s", HTTP_PUSH__DST_URL, NOTIFICATION__device_token);
-
-                    curl = curl_easy_init();
-
-                    if (curl)
-                    {
-                        struct string s;
-                        init_string(&s);
-
-                        curl_easy_setopt(curl, CURLOPT_URL, buf);
-                        curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
-                        // toxProxyLog(9, "get_url=%s", buf);
-                        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-                        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
-
-                        res = curl_easy_perform(curl);
-
-                        if (res != CURLE_OK)
-                        {
-                            toxProxyLog(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
-                        }
-                        else
-                        {
-                            // toxProxyLog(9, "server_answer=%s", s.ptr);
-
-                            char *found = strstr((const char *)s.ptr, (const char *)"OK");
-
-                            if (found == NULL)
-                            {
-                                toxProxyLog(9, "server_answer=%s", s.ptr);
-                                result = 0; // do not retry, or the server may be spammed
-                            }
-                            else
-                            {
-                                toxProxyLog(9, "server_answer:OK:%s", s.ptr);
-                                result = 0;
-                            }
-                            free(s.ptr);
-                            s.ptr = NULL;
-                        }
-
-                        curl_easy_cleanup(curl);
-                    }
-
-                    if (result == 0)
-                    {
-                        need_send_notification = 0;
-                    }
-                }
-                else if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+                if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
                 {
                     toxProxyLog(9, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
                     int result = 1;
@@ -2401,13 +2037,13 @@ int main(int argc, char *argv[])
         }
     }
 
-    mkdir("db", S_IRWXU);
+    mkdir(save_dir, S_IRWXU);
 
     read_token_from_file();
 
     on_start();
 
-#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP) || (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
     curl_global_init(CURL_GLOBAL_ALL);
     need_send_notification = 0;
     notification_thread_stop = 0;
@@ -2632,7 +2268,7 @@ int main(int argc, char *argv[])
     tox_kill(tox);
 #endif
 
-#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_HTTP) || (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
     notification_thread_stop = 1;
     pthread_join(notification_thread, NULL);
 
