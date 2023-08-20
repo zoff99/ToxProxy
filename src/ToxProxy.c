@@ -1911,6 +1911,7 @@ static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *inv
 static void group_peer_join_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, void *user_data)
 {
     toxProxyLog(2, "Peer %d joined group %d", peer_id, group_number);
+    updateToxSavedata(tox);
 }
 
 static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, Tox_Group_Exit_Type exit_type,
@@ -1936,6 +1937,7 @@ static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id
         toxProxyLog(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_SYNC_ERROR", peer_id, group_number, exit_type);
             break;
     }
+    updateToxSavedata(tox);
 }
 
 static void group_self_join_cb(Tox *tox, uint32_t group_number, void *user_data)
@@ -1947,6 +1949,7 @@ static void group_self_join_cb(Tox *tox, uint32_t group_number, void *user_data)
 static void group_join_fail_cb(Tox *tox, uint32_t group_number, Tox_Group_Join_Fail fail_type, void *user_data)
 {
     toxProxyLog(2, "Joining group %d failed. reason: %d", group_number, fail_type);
+    updateToxSavedata(tox);
 }
 
 int main(int argc, char *argv[])
