@@ -3421,7 +3421,7 @@ typedef enum Onion_Connection_Status {
 } Onion_Connection_Status;
 
 non_null()
-Onion_Connection_Status onion_connection_status(const Onion_Client *onion_c);
+Onion_Connection_Status onion_connection_status(const Onion_Client *onion_c, bool lan_only_is_online);
 
 typedef struct Onion_Friend Onion_Friend;
 
@@ -10020,7 +10020,6 @@ uint32_t tox_group_peer_count(const Tox *tox, uint32_t group_number, Tox_Err_Gro
 uint32_t tox_group_offline_peer_count(const Tox *tox, uint32_t group_number, Tox_Err_Group_Peer_Query *error);
 
 void tox_group_get_peerlist(const Tox *tox, uint32_t group_number, uint32_t *peerlist, Tox_Err_Group_Peer_Query *error);
-void tox_group_get_offline_peerlist(const Tox *tox, uint32_t group_number, uint32_t *peerlist, Tox_Err_Group_Peer_Query *error);
 
 /**
  * Return the length of the peer's name. If the group number or ID is invalid, the
@@ -10107,6 +10106,9 @@ Tox_Connection tox_group_peer_get_connection_status(const Tox *tox, uint32_t gro
  * @return true on success.
  */
 bool tox_group_peer_get_public_key(const Tox *tox, uint32_t group_number, uint32_t peer_id, uint8_t *public_key,
+                                   Tox_Err_Group_Peer_Query *error);
+
+bool tox_group_savedpeer_get_public_key(const Tox *tox, uint32_t group_number, uint32_t slot_number, uint8_t *public_key,
                                    Tox_Err_Group_Peer_Query *error);
 
 /**
@@ -12950,6 +12952,9 @@ int64_t get_gc_peer_id_by_public_key(const GC_Chat *chat, const uint8_t *public_
 non_null(1) nullable(3)
 int gc_get_peer_public_key_by_peer_id(const GC_Chat *chat, uint32_t peer_id, uint8_t *public_key);
 
+non_null(1) nullable(3)
+int gc_get_savedpeer_public_key_by_slot_number(const GC_Chat *chat, uint32_t slot_number, uint8_t *public_key);
+
 /** @brief Gets the connection status for peer associated with `peer_id`.
  *
  * Returns 2 if we have a direct (UDP) connection with a peer.
@@ -13279,9 +13284,6 @@ uint32_t get_group_offline_peercount(const GC_Chat *chat);
 
 non_null()
 void copy_peerlist(const GC_Chat *chat, uint32_t *out_list);
-
-non_null()
-void copy_offline_peerlist(const GC_Chat *chat, uint32_t *out_list);
 
 /** @brief Returns true if peer_number exists */
 non_null()
@@ -29886,6 +29888,28 @@ int64_t get_gc_peer_id_by_public_key(const GC_Chat *chat, const uint8_t *public_
     return (chat->group[target_peer_number].peer_id);
 }
 
+int gc_get_savedpeer_public_key_by_slot_number(const GC_Chat *chat, uint32_t slot_number, uint8_t *public_key)
+{
+    if (((int)slot_number < 0) || (slot_number > GC_MAX_SAVED_PEERS))
+    {
+        return -1;
+    }
+
+    if (public_key == nullptr) {
+        return -1;
+    }
+
+    const GC_SavedPeerInfo *saved_peer = &chat->saved_peers[slot_number];
+    if (saved_peer_is_valid(saved_peer)) {
+        const int peernumber = get_peer_number_of_enc_pk(chat, saved_peer->public_key, true);
+        if (peernumber < 0) {
+            memcpy(public_key, saved_peer->public_key, ENC_PUBLIC_KEY_SIZE);
+            return 0;
+        }
+    }
+    return -1;
+}
+
 int gc_get_peer_public_key_by_peer_id(const GC_Chat *chat, uint32_t peer_id, uint8_t *public_key)
 {
     const int peer_number = get_peer_number_of_peer_id(chat, peer_id);
@@ -34679,19 +34703,14 @@ uint32_t get_group_offline_peercount(const GC_Chat *chat)
         return 0;
     }
 
-    if (chat->numpeers == 0) {
-        return 0;
-    }
-
     uint32_t sum = 0;
-
-    for (uint32_t i = 0; i < chat->numpeers; ++i) {
-        const GC_Connection *gconn = get_gc_connection(chat, i);
-
-        assert(gconn != nullptr);
-
-        if (!gconn->confirmed) {
-            ++sum;
+    for (uint16_t i = 0; i < GC_MAX_SAVED_PEERS; ++i) {
+        const GC_SavedPeerInfo *saved_peer = &chat->saved_peers[i];
+        if (saved_peer_is_valid(saved_peer)) {
+            const int peernumber = get_peer_number_of_enc_pk(chat, saved_peer->public_key, true);
+            if (peernumber < 0) {
+                ++sum;
+            }
         }
     }
 
@@ -34720,34 +34739,6 @@ void copy_peerlist(const GC_Chat *chat, uint32_t *out_list)
         assert(gconn != nullptr);
 
         if (gconn->confirmed) {
-            out_list[index] = chat->group[i].peer_id;
-            ++index;
-        }
-    }
-}
-
-void copy_offline_peerlist(const GC_Chat *chat, uint32_t *out_list)
-{
-    if (out_list == nullptr) {
-        return;
-    }
-
-    if (chat == nullptr) {
-        return;
-    }
-
-    if (chat->numpeers == 0) {
-        return;
-    }
-
-    uint32_t index = 0;
-
-    for (uint32_t i = 0; i < chat->numpeers; ++i) {
-        const GC_Connection *gconn = get_gc_connection(chat, i);
-
-        assert(gconn != nullptr);
-
-        if (!gconn->confirmed) {
             out_list[index] = chat->group[i].peer_id;
             ++index;
         }
@@ -40703,7 +40694,7 @@ static void do_friends(Messenger *m, void *userdata)
 non_null(1) nullable(2)
 static void m_connection_status_callback(Messenger *m, void *userdata)
 {
-    const Onion_Connection_Status conn_status = onion_connection_status(m->onion_c);
+    const Onion_Connection_Status conn_status = onion_connection_status(m->onion_c, true);
 
     if (conn_status != m->last_connection_status) {
         if (m->core_connection_change != nullptr) {
@@ -49214,6 +49205,7 @@ struct Onion_Client {
 
     unsigned int onion_connected;
     bool udp_connected;
+    bool udp_connected_lan_only_is_ok;
 
     onion_group_announce_cb *group_announce_response;
     void *group_announce_response_user_data;
@@ -51085,13 +51077,18 @@ static void reset_friend_run_counts(Onion_Client *onion_c)
 #define ONION_CONNECTION_SECONDS 3
 #define ONION_CONNECTED_TIMEOUT 10
 
-Onion_Connection_Status onion_connection_status(const Onion_Client *onion_c)
+Onion_Connection_Status onion_connection_status(const Onion_Client *onion_c, bool lan_only_is_online)
 {
     if (onion_c->onion_connected >= ONION_CONNECTION_SECONDS) {
-        if (onion_c->udp_connected) {
-            return ONION_CONNECTION_STATUS_UDP;
+        if (lan_only_is_online) {
+            if (onion_c->udp_connected_lan_only_is_ok) {
+                return ONION_CONNECTION_STATUS_UDP;
+            }
+        } else {
+            if (onion_c->udp_connected) {
+                return ONION_CONNECTION_STATUS_UDP;
+            }
         }
-
         return ONION_CONNECTION_STATUS_TCP;
     }
 
@@ -51126,12 +51123,13 @@ void do_onion_client(Onion_Client *onion_c)
     }
 
     onion_c->udp_connected = dht_non_lan_connected(onion_c->dht);
+    onion_c->udp_connected_lan_only_is_ok = dht_isconnected(onion_c->dht);
 
     if (mono_time_is_timeout(onion_c->mono_time, onion_c->first_run, ONION_CONNECTION_SECONDS * 2)) {
         set_tcp_onion_status(nc_get_tcp_c(onion_c->c), !onion_c->udp_connected);
     }
 
-    if (onion_connection_status(onion_c) != ONION_CONNECTION_STATUS_NONE) {
+    if (onion_connection_status(onion_c, false) != ONION_CONNECTION_STATUS_NONE) {
         for (unsigned i = 0; i < onion_c->num_friends; ++i) {
             do_friend(onion_c, i);
         }
@@ -57922,7 +57920,7 @@ Tox_Connection tox_self_get_connection_status(const Tox *tox)
 {
     assert(tox != nullptr);
     tox_lock(tox);
-    const Onion_Connection_Status ret = onion_connection_status(tox->m->onion_c);
+    const Onion_Connection_Status ret = onion_connection_status(tox->m->onion_c, true);
     tox_unlock(tox);
 
     switch (ret) {
@@ -60283,32 +60281,6 @@ void tox_group_get_peerlist(const Tox *tox, uint32_t group_number, uint32_t *pee
     return;
 }
 
-void tox_group_get_offline_peerlist(const Tox *tox, uint32_t group_number, uint32_t *peerlist, Tox_Err_Group_Peer_Query *error)
-{
-    assert(tox != nullptr);
-
-    tox_lock(tox);
-    const GC_Chat *chat = gc_get_group(tox->m->group_handler, group_number);
-
-    if (chat == nullptr) {
-        SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_PEER_QUERY_GROUP_NOT_FOUND);
-        tox_unlock(tox);
-        return;
-    }
-
-    if (peerlist == nullptr) {
-        SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_PEER_QUERY_GROUP_NOT_FOUND);
-        tox_unlock(tox);
-        return;
-    }
-
-    copy_offline_peerlist(chat, peerlist);
-    tox_unlock(tox);
-
-    SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_PEER_QUERY_OK);
-    return;
-}
-
 size_t tox_group_peer_get_name_size(const Tox *tox, uint32_t group_number, uint32_t peer_id,
                                     Tox_Err_Group_Peer_Query *error)
 {
@@ -60411,6 +60383,32 @@ Tox_Group_Role tox_group_peer_get_role(const Tox *tox, uint32_t group_number, ui
 
     SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_PEER_QUERY_OK);
     return (Tox_Group_Role)ret;
+}
+
+bool tox_group_savedpeer_get_public_key(const Tox *tox, uint32_t group_number, uint32_t slot_number, uint8_t *public_key,
+                                   Tox_Err_Group_Peer_Query *error)
+{
+    assert(tox != nullptr);
+
+    tox_lock(tox);
+    const GC_Chat *chat = gc_get_group(tox->m->group_handler, group_number);
+
+    if (chat == nullptr) {
+        SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_PEER_QUERY_GROUP_NOT_FOUND);
+        tox_unlock(tox);
+        return false;
+    }
+
+    const int ret = gc_get_savedpeer_public_key_by_slot_number(chat, slot_number, public_key);
+    tox_unlock(tox);
+
+    if (ret == -1) {
+        SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_PEER_QUERY_PEER_NOT_FOUND);
+        return false;
+    }
+
+    SET_ERROR_PARAMETER(error, TOX_ERR_GROUP_PEER_QUERY_OK);
+    return true;
 }
 
 bool tox_group_peer_get_public_key(const Tox *tox, uint32_t group_number, uint32_t peer_id, uint8_t *public_key,
