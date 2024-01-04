@@ -188,8 +188,8 @@ void openLogFile()
 #ifdef UNIQLOGFILE
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    struct tm tm = *localtime(&tv.tv_sec);
-
+    struct tm tm;
+    tm = *localtime_r(&tv.tv_sec, &tm);
     const int length = 39; // = length of "ToxProxy_0000-00-00_0000-00,000000.log" + 1 for \0 terminator
     char *uniq_log_filename = calloc(1, length);
     snprintf(uniq_log_filename, length, "ToxProxy_%04d-%02d-%02d_%02d%02d-%02d,%06ld.log", tm.tm_year + 1900, tm.tm_mon + 1,
@@ -535,24 +535,21 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
                                   nodes[i].key_hex, sizeof(nodes[i].key_hex) - 1, NULL, NULL, NULL);
         toxProxyLog(99, "bootstap_nodes - sodium_hex2bin:res=%d", res);
 
-        if (use_tor == 0)
-        {
-            TOX_ERR_BOOTSTRAP error;
-            res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
+        TOX_ERR_BOOTSTRAP error;
+        res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
 
-            if (res != true) {
-                if (error == TOX_ERR_BOOTSTRAP_OK) {
-                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
-                } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
-                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
-                } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
-                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
-                } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
-                  toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
-                }
-            } else {
-              toxProxyLog(9, "bootstrap:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
+        if (res != true) {
+            if (error == TOX_ERR_BOOTSTRAP_OK) {
+              toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
+            } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
+              toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
+            } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
+              toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
+            } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
+              toxProxyLog(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
             }
+        } else {
+          toxProxyLog(9, "bootstrap:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
         }
 
         if (add_as_tcp_relay == 1) {
@@ -692,15 +689,7 @@ void bootstrap(Tox *tox)
 #pragma GCC diagnostic ignored "-Wall"
 
     // bootstrap nodes
-    if (use_tor == 0)
-    {
-        bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
-    }
-    else
-    {
-        // dummy node to bootstrap
-        tox_bootstrap(tox, "local", 7766, (uint8_t *)"2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA1", NULL);
-    }
+    bootstap_nodes(tox, nodes_bootstrap_nodes, (int)(sizeof(nodes_bootstrap_nodes) / sizeof(DHT_node)), 0);
 
     // tcp relay nodes
     bootstap_nodes(tox, nodes_tcp_relays, (int)(sizeof(nodes_tcp_relays) / sizeof(DHT_node)), 1);
