@@ -4211,6 +4211,8 @@ typedef struct GC_Chat {
 
     uint8_t     m_group_public_key[CRYPTO_PUBLIC_KEY_SIZE];  // public key for group's messenger friend connection
     int         friend_connection_id;  // identifier for group's messenger friend connection
+
+    bool        flag_exit;  // true if the group will be deleted after the next do_gc() iteration
 } GC_Chat;
 
 #ifndef MESSENGER_DEFINED
@@ -4294,7 +4296,8 @@ int unpack_gc_saved_peers(GC_Chat *chat, const uint8_t *data, uint16_t length);
 
 /** @brief Packs all valid entries from saved peerlist into `data`.
  *
- * If `processed` is non-null it will be set to the length of the packed data.
+ * If `processed` is non-null it will be set to the length of the packed data
+ * on success, and will be untouched on error.
  *
  * Return the number of packed saved peers on success.
  * Return -1 if buffer is too small.
@@ -6883,9 +6886,6 @@ typedef enum Tox_Err_New {
  *
  * This function will bring the instance into a valid state. Running the event
  * loop with a new instance will operate correctly.
- *
- * If loading failed or succeeded only partially, the new or partially loaded
- * instance is returned and an error code is set.
  *
  * @param options An options object as described above. If this parameter is
  *   NULL, the default options are used.
@@ -10081,7 +10081,8 @@ Tox_Group_Role tox_group_peer_get_role(const Tox *tox, uint32_t group_number, ui
 /**
  * Return the type of connection we have established with a peer.
  *
- * This function will return an error if called on ourselves.
+ * If `peer_id` designates ourself, the return value indicates whether we're capable
+ * of making UDP connections with other peers, or are limited to TCP connections.
  *
  * @param group_number The group number of the group we wish to query.
  * @param peer_id The ID of the peer whose connection status we wish to query.
@@ -12957,9 +12958,12 @@ int gc_get_savedpeer_public_key_by_slot_number(const GC_Chat *chat, uint32_t slo
 
 /** @brief Gets the connection status for peer associated with `peer_id`.
  *
+ * If `peer_id` designates ourself, the return value indicates whether we're capable
+ * of making UDP connections with other peers, or are limited to TCP connections.
+ *
  * Returns 2 if we have a direct (UDP) connection with a peer.
  * Returns 1 if we have an indirect (TCP) connection with a peer.
- * Returns 0 if peer_id is invalid or corresponds to ourselves.
+ * Returns 0 if peer_id is invalid.
  *
  * Note: Return values must correspond to Tox_Connection enum in API.
  */
@@ -17970,8 +17974,8 @@ int pack_nodes(const Logger *logger, uint8_t *data, uint16_t length, const Node_
 
 #ifndef NDEBUG
         const uint32_t increment = ipp_size + CRYPTO_PUBLIC_KEY_SIZE;
-#endif
         assert(increment == PACKED_NODE_SIZE_IP4 || increment == PACKED_NODE_SIZE_IP6);
+#endif
     }
 
     return packed_length;
@@ -18009,8 +18013,8 @@ int unpack_nodes(Node_format *nodes, uint16_t max_num_nodes, uint16_t *processed
 
 #ifndef NDEBUG
         const uint32_t increment = ipp_size + CRYPTO_PUBLIC_KEY_SIZE;
-#endif
         assert(increment == PACKED_NODE_SIZE_IP4 || increment == PACKED_NODE_SIZE_IP6);
+#endif
     }
 
     if (processed_data_len != nullptr) {
@@ -20880,7 +20884,11 @@ void kill_forwarding(Forwarding *forwarding)
 
 #define PORTS_PER_DISCOVERY 10
 
+#ifdef NOGLOBALVARS
+static bool global_force_udp_only_mode = false;
+#else
 extern bool global_force_udp_only_mode;
+#endif
 
 typedef struct Friend_Conn_Callbacks {
     fc_status_cb *status_callback;
@@ -23325,6 +23333,7 @@ static int addpeer(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_p
 
     if (peer_index != -1) {
         if (!pk_equal(g->group[peer_index].real_pk, real_pk)) {
+            LOGGER_ERROR(g_c->m->log, "peer public key is incorrect for peer %d", peer_number);
             return -1;
         }
 
@@ -26213,6 +26222,7 @@ static State_Load_Status load_conferences_helper(Group_Chats *g_c, const uint8_t
 
         if (groupnumber == -1) {
             // If this fails there's a serious problem, don't bother with cleanup
+            LOGGER_ERROR(g_c->m->log, "conference creation failed");
             return STATE_LOAD_STATUS_ERROR;
         }
 
@@ -26239,6 +26249,7 @@ static State_Load_Status load_conferences_helper(Group_Chats *g_c, const uint8_t
                                        nullptr, true, false);
 
         if (peer_index == -1) {
+            LOGGER_ERROR(g_c->m->log, "adding peer %d failed", g->peer_number);
             return STATE_LOAD_STATUS_ERROR;
         }
 
@@ -29933,8 +29944,8 @@ unsigned int gc_get_peer_connection_status(const GC_Chat *chat, uint32_t peer_id
 {
     const int peer_number = get_peer_number_of_peer_id(chat, peer_id);
 
-    if (peer_number_is_self(peer_number)) {  // we cannot have a connection with ourselves
-        return 0;
+    if (peer_number_is_self(peer_number)) {
+        return chat->self_udp_status ==  SELF_UDP_STATUS_NONE ? 1 : 2;
     }
 
     const GC_Connection *gconn = get_gc_connection(chat, peer_number);
@@ -30349,6 +30360,11 @@ static int handle_gc_key_exchange(const GC_Chat *chat, GC_Connection *gconn, con
     memcpy(response + 1, new_session_pk, ENC_PUBLIC_KEY_SIZE);
 
     if (!send_lossless_group_packet(chat, gconn, response, sizeof(response), GP_KEY_ROTATION)) {
+        // Don't really care about zeroing the secret key here, because we failed, but
+        // we're doing it anyway for symmetry with the memzero+munlock below, where we
+        // really do care about it.
+        crypto_memzero(new_session_sk, sizeof(new_session_sk));
+        crypto_memunlock(new_session_sk, sizeof(new_session_sk));
         return -3;
     }
 
@@ -30358,6 +30374,7 @@ static int handle_gc_key_exchange(const GC_Chat *chat, GC_Connection *gconn, con
 
     gcc_make_session_shared_key(gconn, sender_public_session_key);
 
+    crypto_memzero(new_session_sk, sizeof(new_session_sk));
     crypto_memunlock(new_session_sk, sizeof(new_session_sk));
 
     gconn->last_key_rotation = mono_time_get(chat->mono_time);
@@ -33383,12 +33400,12 @@ static bool ping_peer(const GC_Chat *chat, const GC_Connection *gconn)
 
     if (!send_lossy_group_packet(chat, gconn, data, packed_len, GP_PING)) {
         free(data);
-        return true;
+        return false;
     }
 
     free(data);
 
-    return false;
+    return true;
 }
 
 /**
@@ -33592,6 +33609,10 @@ void do_gc(GC_Session *c, void *userdata)
             if (c->connection_status_change != nullptr) {
                 c->connection_status_change(c->messenger, chat->group_number, chat->connection_state, userdata);
             }
+        }
+
+        if (chat->flag_exit) {  // should always come last as it modifies the chats array
+            group_delete(c, chat);
         }
     }
 }
@@ -33907,6 +33928,9 @@ int gc_group_load(GC_Session *c, Bin_Unpack *bu)
     chat->rng = m->rng;
     chat->last_ping_interval = tm;
     chat->friend_connection_id = -1;
+
+    // Initialise these first, because we may need to log/dealloc things on cleanup.
+    chat->moderation.log = m->log;
 
     if (!gc_load_unpack_group(chat, bu)) {
         LOGGER_ERROR(chat->log, "Failed to unpack group");
@@ -34578,7 +34602,14 @@ static void group_delete(GC_Session *c, GC_Chat *chat)
 
 int gc_group_exit(GC_Session *c, GC_Chat *chat, const uint8_t *message, uint16_t length)
 {
-    const int ret =  group_can_handle_packets(chat) ? send_gc_self_exit(chat, message, length) : 0;
+    chat->flag_exit = true;
+    return group_can_handle_packets(chat) ? send_gc_self_exit(chat, message, length) : 0;
+}
+
+non_null()
+static int kill_group(GC_Session *c, GC_Chat *chat)
+{
+    const int ret = gc_group_exit(c, chat, nullptr, 0);
     group_delete(c, chat);
     return ret;
 }
@@ -34596,11 +34627,9 @@ void kill_dht_groupchats(GC_Session *c)
             continue;
         }
 
-        if (group_can_handle_packets(chat)) {
-            send_gc_self_exit(chat, nullptr, 0);
+        if (kill_group(c, chat) != 0) {
+            LOGGER_WARNING(chat->log, "Failed to send group exit packet");
         }
-
-        group_cleanup(c, chat);
     }
 
     networking_registerhandler(c->messenger->net, NET_PACKET_GC_LOSSY, nullptr, nullptr);
@@ -36619,7 +36648,6 @@ int create_gca_announce_request(
  */
 
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36723,7 +36751,7 @@ static bool load_unpack_mod_list(GC_Chat *chat, Bin_Unpack *bu)
 
     if (chat->moderation.num_mods > MOD_MAX_NUM_MODERATORS) {
         LOGGER_ERROR(chat->log, "moderation count %u exceeds maximum %u", chat->moderation.num_mods, MOD_MAX_NUM_MODERATORS);
-        return false;
+        chat->moderation.num_mods = MOD_MAX_NUM_MODERATORS;
     }
 
     uint8_t *packed_mod_list = (uint8_t *)malloc(chat->moderation.num_mods * MOD_LIST_ENTRY_SIZE);
@@ -36791,7 +36819,10 @@ static bool load_unpack_self_info(GC_Chat *chat, Bin_Unpack *bu)
         return false;
     }
 
-    assert(self_nick_len <= MAX_GC_NICK_SIZE);
+    if (self_nick_len > MAX_GC_NICK_SIZE) {
+        LOGGER_ERROR(chat->log, "self_nick too big (%u bytes), truncating to %d", self_nick_len, MAX_GC_NICK_SIZE);
+        self_nick_len = MAX_GC_NICK_SIZE;
+    }
 
     if (!bin_unpack_bin_fixed(bu, self_nick, self_nick_len)) {
         LOGGER_ERROR(chat->log, "Failed to unpack self nick bytes");
@@ -36804,7 +36835,10 @@ static bool load_unpack_self_info(GC_Chat *chat, Bin_Unpack *bu)
         return false;
     }
 
-    assert(chat->numpeers > 0);
+    if (chat->numpeers == 0) {
+        LOGGER_ERROR(chat->log, "Failed to unpack self: numpeers should be > 0");
+        return false;
+    }
 
     GC_Peer *self = &chat->group[0];
 
@@ -36966,9 +37000,12 @@ static void save_pack_self_info(const GC_Chat *chat, Bin_Pack *bp)
 {
     bin_pack_array(bp, 4);
 
-    const GC_Peer *self = &chat->group[0];
+    GC_Peer *self = &chat->group[0];
 
-    assert(self->nick_length <= MAX_GC_NICK_SIZE);
+    if (self->nick_length > MAX_GC_NICK_SIZE) {
+        LOGGER_ERROR(chat->log, "self_nick is too big (%u). Truncating to %d", self->nick_length, MAX_GC_NICK_SIZE);
+        self->nick_length = MAX_GC_NICK_SIZE;
+    }
 
     bin_pack_u16(bp, self->nick_length); // 1
     bin_pack_u08(bp, (uint8_t)self->role); // 2
@@ -37932,8 +37969,13 @@ int my_pthread_mutex_unlock(pthread_mutex_t *mutex, const char *mutex_name, cons
  * someone wanted not to include tox.h here
  */
 
+#ifdef NOGLOBALVARS
+static bool global_force_udp_only_mode = false;
+static bool global_onion_active = true;
+#else
 extern bool global_force_udp_only_mode;
 extern bool global_onion_active;
+#endif
 
 static_assert(MAX_CONCURRENT_FILE_PIPES <= UINT8_MAX + 1,
               "uint8_t cannot represent all file transfer numbers");
@@ -40860,7 +40902,7 @@ void do_messenger(Messenger *m, void *userdata)
         if (m->tcp_server != nullptr) {
             /* Add self tcp server. */
             IP_Port local_ip_port;
-            local_ip_port.port = m->options.tcp_server_port;
+            local_ip_port.port = net_htons(m->options.tcp_server_port);
             local_ip_port.ip.family = net_family_ipv4();
             local_ip_port.ip.ip.v4 = get_ip4_loopback();
             add_tcp_relay(m->net_crypto, &local_ip_port, tcp_server_public_key(m->tcp_server));
@@ -41289,6 +41331,7 @@ static State_Load_Status load_nospam_keys(Messenger *m, const uint8_t *data, uin
     load_secret_key(m->net_crypto, data + sizeof(uint32_t) + CRYPTO_PUBLIC_KEY_SIZE);
 
     if (!pk_equal(data + sizeof(uint32_t), nc_get_self_public_key(m->net_crypto))) {
+        LOGGER_ERROR(m->log, "public key stored in savedata does not match its secret key");
         return STATE_LOAD_STATUS_ERROR;
     }
 
@@ -41520,8 +41563,11 @@ static State_Load_Status groups_load(Messenger *m, const uint8_t *data, uint32_t
 
         if (group_number < 0) {
             LOGGER_WARNING(m->log, "Failed to load group %u", i);
+            // Can't recover trivially. We may need to skip over some data here.
         }
     }
+
+    LOGGER_DEBUG(m->log, "Successfully loaded %u groups", gc_count_groups(m->group_handler));
 
     bin_unpack_free(bu);
 
@@ -46653,7 +46699,7 @@ void networking_poll(const Networking_Core *net, void *userdata)
     }
 
     IP_Port ip_port;
-    uint8_t data[MAX_UDP_PACKET_SIZE];
+    uint8_t data[MAX_UDP_PACKET_SIZE] = {0};
     uint32_t length;
 
     while (receivepacket(net->ns, net->log, net->sock, &ip_port, data, &length) != -1) {
@@ -46749,6 +46795,7 @@ Networking_Core *new_networking_ex(
      */
     int n = 1024 * 1024 * 2;
 
+#if !(defined(__NetBSD__))
     if (net_setsockopt(ns, temp->sock, SOL_SOCKET, SO_RCVBUF, &n, sizeof(n)) != 0) {
         LOGGER_ERROR(log, "failed to set socket option %d", SO_RCVBUF);
     }
@@ -46756,6 +46803,7 @@ Networking_Core *new_networking_ex(
     if (net_setsockopt(ns, temp->sock, SOL_SOCKET, SO_SNDBUF, &n, sizeof(n)) != 0) {
         LOGGER_ERROR(log, "failed to set socket option %d", SO_SNDBUF);
     }
+#endif
 
     /* Enable broadcast on socket */
     int broadcast = 1;
@@ -47337,6 +47385,9 @@ int32_t net_getipport(const char *node, IP_Port **res, int tox_type)
 {
     // Try parsing as IP address first.
     IP_Port parsed = {{{0}}};
+    // Initialise to nullptr. In error paths, at least we initialise the out
+    // parameter.
+    *res = nullptr;
 
     if (addr_parse_ip(node, &parsed.ip)) {
         IP_Port *tmp = (IP_Port *)calloc(1, sizeof(IP_Port));
@@ -47365,7 +47416,6 @@ int32_t net_getipport(const char *node, IP_Port **res, int tox_type)
     // It's not an IP address, so now we try doing a DNS lookup.
     struct addrinfo *infos;
     const int ret = getaddrinfo(node, nullptr, nullptr, &infos);
-    *res = nullptr;
 
     if (ret != 0) {
         return -1;
@@ -51937,7 +51987,7 @@ int state_load(const Logger *log, state_load_cb *state_load_callback, void *oute
             }
 
             case STATE_LOAD_STATUS_ERROR: {
-                LOGGER_ERROR(log, "Error occcured in state file (type: %u).", type);
+                LOGGER_ERROR(log, "Error occcured in state file (type: 0x%02x).", type);
                 return -1;
             }
 
@@ -57658,12 +57708,26 @@ Tox *tox_new(const struct Tox_Options *options, Tox_Err_New *error)
 
     if (load_savedata_tox
             && tox_load(tox, tox_options_get_savedata_data(opts), tox_options_get_savedata_length(opts)) == -1) {
+        kill_groupchats(tox->m->conferences_object);
+        kill_messenger(tox->m);
+
+        mono_time_free(tox->mono_time);
+        tox_options_free(default_options);
+        tox_unlock(tox);
+
+        if (tox->mutex != nullptr) {
+            pthread_mutex_destroy(tox->mutex);
+        }
+
+        free(tox->mutex);
+        free(tox);
+
         SET_ERROR_PARAMETER(error, TOX_ERR_NEW_LOAD_BAD_FORMAT);
-    } else if (load_savedata_sk) {
+        return nullptr;
+    }
+
+    if (load_savedata_sk) {
         load_secret_key(tox->m->net_crypto, tox_options_get_savedata_data(opts));
-        SET_ERROR_PARAMETER(error, TOX_ERR_NEW_OK);
-    } else {
-        SET_ERROR_PARAMETER(error, TOX_ERR_NEW_OK);
     }
 
     m_callback_namechange(tox->m, tox_friend_name_handler);
@@ -57714,6 +57778,9 @@ Tox *tox_new(const struct Tox_Options *options, Tox_Err_New *error)
     tox_options_free(default_options);
 
     tox_unlock(tox);
+
+    SET_ERROR_PARAMETER(error, TOX_ERR_NEW_OK);
+
     return tox;
 }
 
