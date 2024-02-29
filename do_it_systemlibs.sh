@@ -170,7 +170,7 @@ add_flag -Wno-pointer-sign
 add_flag -Werror
 add_flag -fdiagnostics-color=always
 
-gcc -O3 -g -fstack-protector-all -fPIC ToxProxy.c $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
+gcc -O3 -g -fstack-protector-all -fPIC ToxProxy.c -fno-omit-frame-pointer -fsanitize=address -static-libasan $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
 
 # -l:libsodium.a \
 
