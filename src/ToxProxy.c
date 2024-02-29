@@ -26,7 +26,11 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 
  linux compile:
 
- gcc -O3 -fPIC ToxProxy.c $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
+ gcc -O3 -fPIC -g -fstack-protector-all ToxProxy.c $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
+
+ linux ASAN compile:
+
+ gcc -O3 -g -fstack-protector-all -fPIC ToxProxy.c -fno-omit-frame-pointer -fsanitize=address -static-libasan $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
 
 */
 
@@ -149,6 +153,7 @@ const char *empty_log_message = "empty log message received!";
 const char *msgsDir = "./messages";
 const char *masterFile = "./db/toxproxymasterpubkey.txt";
 const char *tokenFile = "./db/token.txt";
+const char *silent_marker = "is.silent";
 
 #ifdef WRITE_MY_TOXID_TO_FILE
 const char *my_toxid_filename_txt = "toxid.txt";
@@ -283,6 +288,12 @@ void usleep_usec(uint64_t usec)
     ts.tv_sec = usec / 1000000;
     ts.tv_nsec = (usec % 1000000) * 1000;
     nanosleep(&ts, NULL);
+}
+
+bool file_exists(const char *path)
+{
+    struct stat s;
+    return stat(path, &s) == 0;
 }
 
 void bin2upHex(const uint8_t *bin, uint32_t bin_size, char *hex, uint32_t hex_size)
@@ -696,6 +707,31 @@ void bootstrap(Tox *tox)
 #pragma GCC diagnostic pop
 }
 
+bool check_if_group_notifiation_silent(const char* groupid)
+{
+    bool ret = false;
+
+    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
+    CLEAR(userDir);
+    strcpy(userDir, msgsDir);
+    strcat(userDir, "/");
+    strcat(userDir, groupid);
+
+    char *silentFilePath = calloc(1, sizeof(userDir) + 1 + strlen(silent_marker) + 5 + 1 + 1);
+    strcpy(silentFilePath, userDir);
+    strcat(silentFilePath, "/");
+    strcat(silentFilePath, silent_marker);
+
+    toxProxyLog(0, "checking for: %s", silentFilePath);
+    if (file_exists(silentFilePath))
+    {
+        toxProxyLog(0, "group: %s is silent", groupid);
+        return true;
+    }
+
+    return false;
+}
+
 void writeConferenceMessage(Tox *tox, const char *sender_group_key_hex, const uint8_t *message_orig, size_t length_orig,
                             uint32_t msg_type, char *peer_pubkey_hex, int is_group)
 {
@@ -775,6 +811,18 @@ void writeConferenceMessage(Tox *tox, const char *sender_group_key_hex, const ui
         if (ping_push_service() == 1)
         {
             ping_push_service();
+        }
+    }
+    else
+    {
+        // HINT: check if master wants to get push notifications for this NGC group
+        bool is_silent = check_if_group_notifiation_silent(sender_group_key_hex);
+        if (!is_silent)
+        {
+            if (ping_push_service() == 1)
+            {
+                ping_push_service();
+            }
         }
     }
 
@@ -879,12 +927,6 @@ void writeConferenceMessageHelper(Tox *tox, const uint8_t *conference_id, const 
         bin2upHex(conference_id, TOX_CONFERENCE_ID_SIZE, conference_id_hex, (TOX_CONFERENCE_ID_SIZE * 2 + 1));
         writeConferenceMessage(tox, conference_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex, is_group);
     }
-}
-
-bool file_exists(const char *path)
-{
-    struct stat s;
-    return stat(path, &s) == 0;
 }
 
 void add_master(const char *public_key_hex)
