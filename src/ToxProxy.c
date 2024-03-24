@@ -1675,8 +1675,11 @@ void send_sync_msgs_of_friend(Tox *tox, char *pubKeyHex)
                 const char *last_char = &dp->d_name[len - 1];
                 if (strncmp(last_char, "_", 1) != 0)
                 {
-                    toxProxyLog(2, "found message by %s with filename %s", pubKeyHex, dp->d_name);
-                    send_sync_msg_single(tox, pubKeyHex, dp->d_name);
+                    if (strncmp(dp->d_name, "is.silent", strlen("is.silent")) != 0)
+                    {
+                        toxProxyLog(2, "found message by %s with filename %s", pubKeyHex, dp->d_name);
+                        send_sync_msg_single(tox, pubKeyHex, dp->d_name);
+                    }
                 }
             }
         }
