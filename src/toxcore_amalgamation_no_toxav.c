@@ -2777,6 +2777,12 @@ void kill_tcp_connections(TCP_Connections *tcp_c);
 non_null()
 char *tcp_copy_all_connected_relays(const TCP_Connections *tcp_c, char* relays_report_string, uint16_t max_num, uint32_t* num);
 
+non_null()
+TCP_Connection_to *get_connection(const TCP_Connections *tcp_c, int connections_number);
+
+non_null()
+TCP_con *get_tcp_connection(const TCP_Connections *tcp_c, int tcp_connections_number);
+
 #endif
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright © 2016-2018 The TokTok team.
@@ -3193,6 +3199,8 @@ char *copy_all_connected_relays(Net_Crypto *c, char* relays_report_string, uint1
 
 non_null()
 char *copy_all_udp_connections(Net_Crypto *c, char *connections_report_string, uint16_t max_num, uint32_t* num);
+
+void copy_friend_ip_port(Net_Crypto *c, const int crypt_conn_id, char *report_string, bool direct_connected);
 
 non_null()
 char *udp_copy_all_connected(IP_Port conn_ip_port, char *connections_report_string, uint16_t max_num, uint32_t* num);
@@ -7673,6 +7681,9 @@ void tox_callback_friend_status(Tox *tox, tox_friend_status_cb *callback);
  */
 Tox_Connection tox_friend_get_connection_status(const Tox *tox, uint32_t friend_number, Tox_Err_Friend_Query *error);
 
+void tox_friend_get_connection_ip(const Tox *tox, uint32_t friend_number, uint8_t *ip_str);
+
+
 /**
  * @param friend_number The friend number of the friend whose connection status
  *   changed.
@@ -9570,6 +9581,8 @@ typedef enum Tox_Group_Role {
  *
  ******************************************************************************/
 
+
+void tox_group_get_peer_connection_ip(const Tox *tox, uint32_t group_number, uint32_t peer_id, uint8_t *ip_str);
 
 
 typedef enum Tox_Err_Group_New {
@@ -12858,6 +12871,8 @@ Group_Voice_State gc_get_voice_state(const GC_Chat *chat);
 non_null()
 uint16_t gc_get_max_peers(const GC_Chat *chat);
 
+void gc_get_group_peer_connection_ip(const Messenger *m, int group_number, uint32_t peer_id, uint8_t *ip_str);
+
 /** @brief Sets your own nick to `nick`.
  *
  * `length` cannot exceed MAX_GC_NICK_SIZE. if `length` is zero or `name` is a
@@ -14191,6 +14206,7 @@ typedef struct Messenger_Options {
 #define TOX_CAPABILITY_TOXAV_H264 ((uint64_t)1) << 2
 #define TOX_CAPABILITY_MSGV3 ((uint64_t)1) << 3
 #define TOX_CAPABILITY_FTV2 ((uint64_t)1) << 4
+#define TOX_CAPABILITY_TOXAV_H265 ((uint64_t)1) << 5
 /* add new flags/bits here */
 /* if the TOX_CAPABILITY_NEXT_IMPLEMENTATION flag is set it means
  * we are using a different system for indicating capabilities now,
@@ -14200,9 +14216,9 @@ typedef struct Messenger_Options {
 #define TOX_CAPABILITY_NEXT_IMPLEMENTATION ((uint64_t)1) << 63
 /* hardcoded capabilities of this version/branch of toxcore */
 #ifdef TOX_CAPABILITIES_ACTIVE
-#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_MSGV2 | TOX_CAPABILITY_MSGV3 | TOX_CAPABILITY_TOXAV_H264 | TOX_CAPABILITY_FTV2)
+#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_MSGV2 | TOX_CAPABILITY_MSGV3 | TOX_CAPABILITY_TOXAV_H264 | TOX_CAPABILITY_TOXAV_H265 | TOX_CAPABILITY_FTV2)
 #else
-#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_TOXAV_H264)
+#define TOX_CAPABILITIES_CURRENT (uint64_t)(TOX_CAPABILITY_CAPABILITIES | TOX_CAPABILITY_TOXAV_H264 | TOX_CAPABILITY_TOXAV_H265)
 #endif
 /* size of the FLAGS in bytes */
 #define TOX_CAPABILITIES_SIZE sizeof(uint64_t)
@@ -14546,6 +14562,8 @@ int m_delfriend(Messenger *m, int32_t friendnumber);
  */
 non_null()
 int m_get_friend_connectionstatus(const Messenger *m, int32_t friendnumber);
+
+void m_get_friend_connection_ip(const Messenger *m, int32_t friendnumber, uint8_t *ip_str);
 
 /**
  * Checks if there exists a friend with given friendnumber.
@@ -29765,6 +29783,106 @@ static void handle_gc_peer_exit(const GC_Chat *chat, GC_Connection *gconn, const
     gcc_mark_for_deletion(gconn, chat->tcp_conn, GC_EXIT_TYPE_QUIT, data, length);
 }
 
+void gc_get_group_peer_connection_ip(const Messenger *m, int group_number, uint32_t peer_id, uint8_t *ip_str)
+{
+    if (ip_str == nullptr) {
+        return;
+    }
+    char *p = (char *)ip_str;
+
+    const GC_Session *c = m->group_handler;
+    const GC_Chat *chat = gc_get_group(c, group_number);
+    if (chat == nullptr) {
+        return;
+    }
+    if (chat->connection_state != CS_CONNECTED) {
+        return;
+    }
+
+    const int peer_number = get_peer_number_of_peer_id(chat, peer_id);
+    const GC_Connection *gconn = get_gc_connection(chat, peer_number);
+    if (gconn == nullptr) {
+        return;
+    }
+
+    if (gcc_direct_conn_is_possible(chat, gconn)) {
+        if (gcc_conn_is_direct(chat->mono_time, gconn)) {
+            if (!net_family_is_unspec(gconn->addr.ip_port.ip.family)) {
+                if (net_family_is_ipv4(gconn->addr.ip_port.ip.family)) {
+                    char ipv4[20];
+                    memset(ipv4, 0, 20);
+                    snprintf(ipv4, 16, "%d.%d.%d.%d",
+                        gconn->addr.ip_port.ip.ip.v4.uint8[0],
+                        gconn->addr.ip_port.ip.ip.v4.uint8[1],
+                        gconn->addr.ip_port.ip.ip.v4.uint8[2],
+                        gconn->addr.ip_port.ip.ip.v4.uint8[3]
+                    );
+                    p += snprintf(p, 60, "%s %5d\n", ipv4, net_ntohs(gconn->addr.ip_port.port));
+                } else if (net_family_is_ipv6(gconn->addr.ip_port.ip.family)) {
+                    char ipv6[401];
+                    memset(ipv6, 0, 401);
+                    bool res = ip_parse_addr(&gconn->addr.ip_port.ip, ipv6, 400);
+                    if (!res) {
+                        snprintf(ipv6, 16, "<error in ipv6>");
+                    }
+                    p += snprintf(p, 60, "%s %5d\n", ipv6, net_ntohs(gconn->addr.ip_port.port));
+                }
+            }
+            return;
+        }
+    }
+
+    if (gconn->tcp_relays_count > 0) {
+        // get tcp connections
+        const TCP_Connection_to *con_to = get_connection(chat->tcp_conn, gconn->tcp_connection_num);
+
+        if (con_to == nullptr) {
+            return;
+        }
+        for (uint32_t i = 0; i < MAX_FRIEND_TCP_CONNECTIONS; ++i) {
+            uint32_t tcp_con_num = con_to->connections[i].tcp_connection;
+            const uint8_t status = con_to->connections[i].status;
+
+            if (tcp_con_num > 0 && status == TCP_CONNECTIONS_STATUS_ONLINE) {
+                tcp_con_num -= 1;
+                TCP_con *tcp_con = get_tcp_connection(chat->tcp_conn, tcp_con_num);
+
+                if (tcp_con == nullptr) {
+                    continue;
+                }
+
+                if (tcp_con->connection == nullptr) {
+                    continue;
+                }
+
+                const IP_Port conn_ip_port = tcp_con_ip_port(tcp_con->connection);
+
+                if (!net_family_is_unspec(conn_ip_port.ip.family)) {
+                    if (net_family_is_ipv4(conn_ip_port.ip.family)) {
+                        char ipv4[20];
+                        memset(ipv4, 0, 20);
+                        snprintf(ipv4, 16, "%d.%d.%d.%d",
+                            conn_ip_port.ip.ip.v4.uint8[0],
+                            conn_ip_port.ip.ip.v4.uint8[1],
+                            conn_ip_port.ip.ip.v4.uint8[2],
+                            conn_ip_port.ip.ip.v4.uint8[3]
+                        );
+                        p += snprintf(p, 60, "%s %5d\n", ipv4, net_ntohs(conn_ip_port.port));
+                    } else if (net_family_is_ipv6(conn_ip_port.ip.family)) {
+                        char ipv6[401];
+                        memset(ipv6, 0, 401);
+                        bool res = ip_parse_addr(&conn_ip_port.ip, ipv6, 400);
+                        if (!res) {
+                            snprintf(ipv6, 16, "<error in ipv6>");
+                        }
+                        p += snprintf(p, 60, "%s %5d\n", ipv6, net_ntohs(conn_ip_port.port));
+                    }
+                }
+            }
+        }
+    }
+}
+
 int gc_set_self_nick(const Messenger *m, int group_number, const uint8_t *nick, uint16_t length)
 {
     const GC_Session *c = m->group_handler;
@@ -38489,6 +38607,41 @@ int m_get_friend_connectionstatus(const Messenger *m, int32_t friendnumber)
     return m->friendlist[friendnumber].last_connection_udp_tcp;
 }
 
+
+void m_get_friend_connection_ip(const Messenger *m, int32_t friendnumber, uint8_t *ip_str)
+{
+    if (ip_str == nullptr) {
+        return;
+    }
+
+    if (!m_friend_exists(m, friendnumber)) {
+        return;
+    }
+
+    if (m->friendlist[friendnumber].status != FRIEND_ONLINE) {
+        return;
+    }
+
+    bool direct_connected = false;
+    uint32_t num_online_relays = 0;
+    const int crypt_conn_id = friend_connection_crypt_connection_id(m->fr_c, m->friendlist[friendnumber].friendcon_id);
+
+    if (!crypto_connection_status(m->net_crypto, crypt_conn_id, &direct_connected, &num_online_relays)) {
+        return;
+    }
+
+    if (direct_connected) {
+        // CONNECTION_UDP;
+        copy_friend_ip_port(m->net_crypto, crypt_conn_id, (char *)ip_str, direct_connected);
+        return;
+    }
+
+    if (num_online_relays != 0) {
+        // CONNECTION_TCP;
+        copy_friend_ip_port(m->net_crypto, crypt_conn_id, (char *)ip_str, direct_connected);
+    }
+}
+
 /**
  * Checks if there exists a friend with given friendnumber.
  *
@@ -44754,6 +44907,92 @@ char *udp_copy_all_connected(IP_Port conn_ip_port, char *connections_report_stri
 
     *num = *num + copied;
     return p;
+}
+
+void copy_friend_ip_port(Net_Crypto *c, const int crypt_conn_id, char *report_string, bool direct_connected)
+{
+    if (report_string == nullptr) {
+        return;
+    }
+
+    char *p = report_string;
+
+    if (direct_connected) {
+        const IP_Port conn_ip_port = return_ip_port_connection(c, crypt_conn_id);
+
+        if (!net_family_is_unspec(conn_ip_port.ip.family)) {
+            if (net_family_is_ipv4(conn_ip_port.ip.family)) {
+                char ipv4[20];
+                memset(ipv4, 0, 20);
+                snprintf(ipv4, 16, "%d.%d.%d.%d",
+                    conn_ip_port.ip.ip.v4.uint8[0],
+                    conn_ip_port.ip.ip.v4.uint8[1],
+                    conn_ip_port.ip.ip.v4.uint8[2],
+                    conn_ip_port.ip.ip.v4.uint8[3]
+                );
+                p += snprintf(p, 60, "%s %5d\n", ipv4, net_ntohs(conn_ip_port.port));
+            } else if (net_family_is_ipv6(conn_ip_port.ip.family)) {
+                char ipv6[401];
+                memset(ipv6, 0, 401);
+                bool res = ip_parse_addr(&conn_ip_port.ip, ipv6, 400);
+                if (!res) {
+                    snprintf(ipv6, 16, "<error in ipv6>");
+                }
+                p += snprintf(p, 60, "%s %5d\n", ipv6, net_ntohs(conn_ip_port.port));
+            }
+        }
+
+    } else {
+        // get tcp connections
+        Crypto_Connection *conn = get_crypto_connection(c, crypt_conn_id);
+        if (conn == nullptr) {
+            return;
+        }
+        unsigned int conn_num_tcp = conn->connection_number_tcp;
+        const TCP_Connection_to *con_to = get_connection(c->tcp_c, conn_num_tcp);
+        if (con_to == nullptr) {
+            return;
+        }
+
+        for (uint32_t i = 0; i < MAX_FRIEND_TCP_CONNECTIONS; ++i) {
+            uint32_t tcp_con_num = con_to->connections[i].tcp_connection;
+            const uint8_t status = con_to->connections[i].status;
+            const uint8_t connection_id = con_to->connections[i].connection_id;
+
+            if (tcp_con_num > 0 && status == TCP_CONNECTIONS_STATUS_ONLINE) {
+                tcp_con_num -= 1;
+                TCP_con *tcp_con = get_tcp_connection(c->tcp_c, tcp_con_num);
+                if (tcp_con == nullptr) {
+                    continue;
+                }
+
+                const IP_Port conn_ip_port = tcp_con_ip_port(tcp_con->connection);
+
+                if (!net_family_is_unspec(conn_ip_port.ip.family)) {
+                    if (net_family_is_ipv4(conn_ip_port.ip.family)) {
+                        char ipv4[20];
+                        memset(ipv4, 0, 20);
+                        snprintf(ipv4, 16, "%d.%d.%d.%d",
+                            conn_ip_port.ip.ip.v4.uint8[0],
+                            conn_ip_port.ip.ip.v4.uint8[1],
+                            conn_ip_port.ip.ip.v4.uint8[2],
+                            conn_ip_port.ip.ip.v4.uint8[3]
+                        );
+                        p += snprintf(p, 60, "%s %5d\n", ipv4, net_ntohs(conn_ip_port.port));
+                    } else if (net_family_is_ipv6(conn_ip_port.ip.family)) {
+                        char ipv6[401];
+                        memset(ipv6, 0, 401);
+                        bool res = ip_parse_addr(&conn_ip_port.ip, ipv6, 400);
+                        if (!res) {
+                            snprintf(ipv6, 16, "<error in ipv6>");
+                        }
+                        p += snprintf(p, 60, "%s %5d\n", ipv6, net_ntohs(conn_ip_port.port));
+                    }
+                }
+            }
+        }
+
+    }
 }
 
 non_null()
@@ -53646,7 +53885,7 @@ static int wipe_tcp_connection(TCP_Connections *tcp_c, int tcp_connections_numbe
 }
 
 non_null()
-static TCP_Connection_to *get_connection(const TCP_Connections *tcp_c, int connections_number)
+TCP_Connection_to *get_connection(const TCP_Connections *tcp_c, int connections_number)
 {
     if (!connections_number_is_valid(tcp_c, connections_number)) {
         return nullptr;
@@ -53656,7 +53895,7 @@ static TCP_Connection_to *get_connection(const TCP_Connections *tcp_c, int conne
 }
 
 non_null()
-static TCP_con *get_tcp_connection(const TCP_Connections *tcp_c, int tcp_connections_number)
+TCP_con *get_tcp_connection(const TCP_Connections *tcp_c, int tcp_connections_number)
 {
     if (!tcp_connections_number_is_valid(tcp_c, tcp_connections_number)) {
         return nullptr;
@@ -58546,6 +58785,18 @@ Tox_Connection tox_friend_get_connection_status(const Tox *tox, uint32_t friend_
     return (Tox_Connection)ret;
 }
 
+void tox_friend_get_connection_ip(const Tox *tox, uint32_t friend_number, uint8_t *ip_str)
+{
+    if (ip_str == nullptr) {
+        return;
+    }
+    assert(tox != nullptr);
+    tox_lock(tox);
+    m_get_friend_connection_ip(tox->m, friend_number, ip_str);
+    tox_unlock(tox);
+}
+
+
 void tox_callback_friend_connection_status(Tox *tox, tox_friend_connection_status_cb *callback)
 {
     assert(tox != nullptr);
@@ -59840,6 +60091,17 @@ void tox_callback_group_join_fail(Tox *tox, tox_group_join_fail_cb *callback)
 {
     assert(tox != nullptr);
     tox->group_join_fail_callback = callback;
+}
+
+void tox_group_get_peer_connection_ip(const Tox *tox, uint32_t group_number, uint32_t peer_id, uint8_t *ip_str)
+{
+    if (ip_str == nullptr) {
+        return;
+    }
+    assert(tox != nullptr);
+    tox_lock(tox);
+    gc_get_group_peer_connection_ip(tox->m, group_number, peer_id, ip_str);
+    tox_unlock(tox);
 }
 
 uint32_t tox_group_new(Tox *tox, Tox_Group_Privacy_State privacy_state, const uint8_t *group_name,
