@@ -1,2 +1,3 @@
 toxcore_amalgamation.o
 toxcore_amalgamation.a
+sql_tables/gen/
