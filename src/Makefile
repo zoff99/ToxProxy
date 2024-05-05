@@ -1,7 +1,8 @@
 CC = gcc
 CFLAGS += -g -O3 -fPIC -I./
 LIBS = $(shell pkg-config --cflags --libs libsodium libcurl) -pthread
-TP_CFLAGS = -Wall -Wextra -Wno-unused-parameter -std=c99 -pedantic
+TP_CFLAGS = -Wall -Wextra -std=c99 -pedantic
+# -Wno-unused-parameter
 LIBSSQLITE3 = -lm
 
 ToxProxy: ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a sqlite3.a

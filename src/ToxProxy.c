@@ -287,8 +287,8 @@ void dbg(int level, const char *msg, ...)
     free(buffer);
 }
 
-void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func,
-                        const char *message, void *user_data)
+void tox_log_cb__custom(Tox *UNUSED(tox), TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func,
+                        const char *message, void *UNUSED(user_data))
 {
     int log_level = LOGLEVEL_DEBUG;
     if (level == TOX_LOG_LEVEL_TRACE) {log_level = LOGLEVEL_DEBUG;}
@@ -858,8 +858,8 @@ bool check_if_group_notifiation_silent(const char* groupid)
     return false;
 }
 
-void writeConferenceMessage(Tox *tox, const char *sender_group_key_hex, const uint8_t *message_orig, size_t length_orig,
-                            uint32_t msg_type, char *peer_pubkey_hex, int is_group)
+void writeConferenceMessage(Tox *UNUSED(tox), const char *sender_group_key_hex, const uint8_t *message_orig, size_t length_orig,
+                            uint32_t UNUSED(msg_type), char *peer_pubkey_hex, int is_group)
 {
     size_t length = length_orig + 64;
     size_t len_copy = length_orig;
@@ -1206,7 +1206,7 @@ int hex_string_to_bin(const char *hex_string, size_t hex_len, char *output, size
     return 0;
 }
 
-void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *message, size_t length, void *user_data)
+void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *message, size_t UNUSED(length), void *UNUSED(user_data))
 {
     char public_key_hex[tox_public_key_hex_size];
     CLEAR(public_key_hex);
@@ -1232,8 +1232,8 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
     dbg(2, "Added friend: %s. Number of total friends: %zu", public_key_hex, friends);
 }
 
-void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, const uint8_t *message, size_t length,
-                       void *user_data)
+void friend_message_cb(Tox *UNUSED(tox), uint32_t friend_number, TOX_MESSAGE_TYPE UNUSED(type), const uint8_t *UNUSED(message),
+                       size_t UNUSED(length), void *UNUSED(user_data))
 {
     // char *default_msg = "YOU are using the old Message format! this is not supported!";
     // tox_friend_send_message(tox, friend_number, type, (uint8_t *) default_msg, strlen(default_msg), NULL);
@@ -1271,7 +1271,7 @@ void send_text_message_to_friend(Tox *tox, uint32_t friend_number, const char *f
 #endif
 }
 
-void friendlist_onConnectionChange(Tox *tox, uint32_t friend_number, TOX_CONNECTION connection_status, void *user_data)
+void friendlist_onConnectionChange(Tox *tox, uint32_t friend_number, TOX_CONNECTION connection_status, void *UNUSED(user_data))
 {
 
     dbg(2, "friendlist_onConnectionChange:*READY*:friendnum=%d %d", (int) friend_number, (int) connection_status);
@@ -1287,7 +1287,7 @@ void friendlist_onConnectionChange(Tox *tox, uint32_t friend_number, TOX_CONNECT
     }
 }
 
-void self_connection_status_cb(Tox *tox, TOX_CONNECTION connection_status, void *user_data)
+void self_connection_status_cb(Tox *UNUSED(tox), TOX_CONNECTION connection_status, void *UNUSED(user_data))
 {
     switch (connection_status) {
         case TOX_CONNECTION_NONE:
@@ -1313,8 +1313,8 @@ void self_connection_status_cb(Tox *tox, TOX_CONNECTION connection_status, void 
     }
 }
 
-void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE type, const uint8_t *cookie,
-                          size_t length, void *user_data)
+void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE UNUSED(type), const uint8_t *cookie,
+                          size_t length, void *UNUSED(user_data))
 {
     if (!is_master_friendnumber(tox, friend_number)) {
         uint8_t *f_name = get_friend_name(tox, friend_number);
@@ -1337,8 +1337,8 @@ void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE 
     updateToxSavedata(tox);
 }
 
-void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, TOX_MESSAGE_TYPE type,
-                           const uint8_t *message, size_t length, void *user_data)
+void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, TOX_MESSAGE_TYPE UNUSED(type),
+                           const uint8_t *message, size_t length, void *UNUSED(user_data))
 {
     dbg(9, "enter conference_message_cb");
     dbg(0, "received conference text message conf:%d peer:%d", conference_number, peer_number);
@@ -1373,18 +1373,18 @@ void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_n
     }
 }
 
-void conference_peer_list_changed_cb(Tox *tox, uint32_t conference_number, void *user_data)
+void conference_peer_list_changed_cb(Tox *tox, uint32_t UNUSED(conference_number), void *UNUSED(user_data))
 {
     updateToxSavedata(tox);
 }
 
-void friend_sync_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t length)
+void friend_sync_message_v2_cb(Tox *UNUSED(tox), uint32_t UNUSED(friend_number), const uint8_t *UNUSED(message), size_t UNUSED(length))
 {
     dbg(9, "enter friend_sync_message_v2_cb");
 }
 
 /* TODO: CHECK */
-bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t length)
+bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t UNUSED(length))
 {
     bool ret = false;
 
@@ -1621,7 +1621,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
 #endif
 }
 
-void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data)
+void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *UNUSED(user_data))
 {
     dbg(9, "enter friend_lossless_packet_cb");
 
@@ -1912,7 +1912,7 @@ int ping_push_service()
 }
 
 /* TODO: CHECK */
-static void *notification_thread_func(void *data)
+static void *notification_thread_func(void *UNUSED(data))
 {
     while (notification_thread_stop == 0)
     {
@@ -2005,8 +2005,8 @@ static void *notification_thread_func(void *data)
     pthread_exit(0);
 }
 
-static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer_number, TOX_MESSAGE_TYPE type,
-                                   const uint8_t *message, size_t length, uint32_t message_id, void *userdata)
+static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer_number, TOX_MESSAGE_TYPE UNUSED(type),
+                                   const uint8_t *message, size_t length, uint32_t message_id, void *UNUSED(userdata))
 {
     dbg(0, "received group text message group:%d peer:%d", groupnumber, peer_number);
 
@@ -2055,7 +2055,7 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
 }
 
 static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *invite_data, size_t length,
-                                 const uint8_t *group_name, size_t group_name_length, void *user_data)
+                                 const uint8_t *UNUSED(group_name), size_t UNUSED(group_name_length), void *UNUSED(user_data))
 {
     size_t nick_len = tox_self_get_name_size(tox);
     char self_nick[TOX_MAX_NAME_LENGTH + 1];
@@ -2091,14 +2091,15 @@ static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *inv
 }
 
 
-static void group_peer_join_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, void *user_data)
+static void group_peer_join_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, void *UNUSED(user_data))
 {
     dbg(2, "Peer %d joined group %d", peer_id, group_number);
     updateToxSavedata(tox);
 }
 
 static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, Tox_Group_Exit_Type exit_type,
-                                    const uint8_t *name, size_t name_length, const uint8_t *part_message, size_t length, void *user_data)
+                                    const uint8_t *UNUSED(name), size_t UNUSED(name_length),
+                                    const uint8_t *UNUSED(part_message), size_t UNUSED(length), void *UNUSED(user_data))
 {
     switch (exit_type) {
         case TOX_GROUP_EXIT_TYPE_QUIT:
@@ -2123,7 +2124,7 @@ static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id
     updateToxSavedata(tox);
 }
 
-static void group_self_join_cb(Tox *tox, uint32_t group_number, void *user_data)
+static void group_self_join_cb(Tox *tox, uint32_t group_number, void *UNUSED(user_data))
 {
     dbg(2, "You joined group %d", group_number);
     updateToxSavedata(tox);
