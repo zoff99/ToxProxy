@@ -2,7 +2,7 @@
  ============================================================================
  Name        : ToxProxy.c
  Authors     : Thomas Käfer, Zoff
- Copyright   : 2019 - 2023
+ Copyright   : 2019 - 2024
 
 Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und richtig angezeigt.
 
@@ -22,27 +22,14 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
  ============================================================================
  */
 
-/*
-
- linux compile:
-
- gcc -O3 -fPIC -g -fstack-protector-all ToxProxy.c $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
-
- linux ASAN compile:
-
- gcc -O3 -g -fstack-protector-all -fPIC ToxProxy.c -fno-omit-frame-pointer -fsanitize=address -static-libasan $(pkg-config --cflags --libs libsodium libcurl) -pthread -o ToxProxy
-
-*/
-
-
 #define _GNU_SOURCE
 
 // ----------- version -----------
 // ----------- version -----------
-#define VERSION_MAJOR 0
-#define VERSION_MINOR 99
-#define VERSION_PATCH 14
-static const char global_version_string[] = "0.99.14";
+#define VERSION_MAJOR 2
+#define VERSION_MINOR 0
+#define VERSION_PATCH 0
+static const char global_version_string[] = "2.0.0";
 // ----------- version -----------
 // ----------- version -----------
 
@@ -99,9 +86,8 @@ static const char global_version_string[] = "0.99.14";
 #define MIN_LOGGER_LEVEL LOGGER_LEVEL_INFO
 // define this before including toxcore amalgamation -------
 
-// include toxcore amalgamation no ToxAV --------
-#include "toxcore_amalgamation_no_toxav.c"
-// include toxcore amalgamation no ToxAV --------
+#include <tox/tox.h>
+#include <tox/toxutil.h>
 
 static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
