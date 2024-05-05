@@ -37,7 +37,7 @@ static const char global_version_string[] = "2.0.0";
 #define WRITE_MY_TOXID_TO_FILE
 
 // define this to have the log statements also printed to stdout and not only into logfile
-// #define LOG2STDOUT
+#define LOG2STDOUT
 
 // define this so every run creates a new (timestamped) logfile and doesn't overwrite previous logfiles.
 // #define UNIQLOGFILE
@@ -102,6 +102,25 @@ extern "C" {
 #else
 # define UNUSED(x) x
 #endif
+
+// -------- bin2upper_case_hex (the out buffer will have a NULL terminator at the end) --------
+#define TO_UPPER_HEX_CHAR(val) ((val) < 10 ? (val) + '0' : (val) - 10 + 'A')
+#define TO_UPPER_HEX_STRING(buffer, hex_buffer, size) do { \
+    for (int32_t i = 0; i < (int32_t)size; i++) { \
+        hex_buffer[2*i] = TO_UPPER_HEX_CHAR((buffer[i] >> 4) & 0xF); \
+        hex_buffer[2*i + 1] = TO_UPPER_HEX_CHAR(buffer[i] & 0xF); \
+    } \
+} while(0)
+//
+//
+// HINT: buffer -> const char* input buffer with bytes
+//       size   -> length in bytes of the input buffer WITHOUT NULL terminator
+//
+#define B2UH(_B2UH_buf, buffer, size) do { \
+    TO_UPPER_HEX_STRING(buffer, _B2UH_buf, size); \
+    _B2UH_buf[2*size] = '\0'; \
+} while(0)
+// -------- bin2upper_case_hex (the out buffer will have a NULL terminator at the end) --------
 
 static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
@@ -2319,17 +2338,18 @@ int main(int argc, char *argv[])
 
     uint8_t tox_id_bin[tox_address_size()];
     tox_self_get_address(tox, tox_id_bin);
-    char tox_id_hex[tox_address_hex_size];
-    bin2upHex(tox_id_bin, tox_address_size(), tox_id_hex, tox_address_hex_size);
+
+    char toxid_hbuf[2*tox_address_size() + 1];
+    B2UH(toxid_hbuf, tox_id_bin, tox_address_size());
 
     {
     Self *p = orma_updateSelf(o->db);
-    int64_t affected_rows3 = p->toxidSet(p, csc(tox_id_hex, tox_address_hex_size_without_null_termin))->execute(p);
+    int64_t affected_rows3 = p->toxidSet(p, csc(toxid_hbuf, tox_address_hex_size_without_null_termin))->execute(p);
     if (affected_rows3 < 1)
     {
         {
         Self *p = orma_new_Self(o->db);
-        p->toxid = csc(tox_id_hex, tox_address_hex_size_without_null_termin);
+        p->toxid = csc(toxid_hbuf, tox_address_hex_size_without_null_termin);
         int64_t inserted_id = orma_insertIntoSelf(p);
         if (inserted_id < 0)
         {
@@ -2352,21 +2372,21 @@ int main(int argc, char *argv[])
     FILE *fp = fopen(my_toxid_filename_txt, "wb");
 
     if (fp) {
-        fprintf(fp, "%s", tox_id_hex);
+        fprintf(fp, "%s", toxid_hbuf);
         fclose(fp);
     }
 
     FILE *fp2 = fopen(my_toxid_filename_txt2, "wb");
 
     if (fp2) {
-        fprintf(fp2, "%s", tox_id_hex);
+        fprintf(fp2, "%s", toxid_hbuf);
         fclose(fp2);
     }
 #endif
 
     size_t friends = tox_self_get_friend_list_size(tox);
     dbg(9, "ToxProxy startup completed");
-    dbg(9, "My Tox ID = %s", tox_id_hex);
+    dbg(9, "My Tox ID = %s", toxid_hbuf);
     dbg(9, "Number of friends = %ld", (long) friends);
 
     tox_callback_friend_request(tox, friend_request_cb);
@@ -2429,7 +2449,7 @@ int main(int argc, char *argv[])
             fprintf(stdout, "#############################################################\n");
             fprintf(stdout, "#############################################################\n");
             fprintf(stdout, "\n");
-            fprintf(stdout, "ToxID:%s\n", tox_id_hex);
+            fprintf(stdout, "ToxID:%s\n", toxid_hbuf);
             fprintf(stdout, "\n");
             fprintf(stdout, "#############################################################\n");
             fprintf(stdout, "#############################################################\n");
@@ -2455,7 +2475,7 @@ int main(int argc, char *argv[])
                     fprintf(stdout, "#############################################################\n");
                     fprintf(stdout, "#############################################################\n");
                     fprintf(stdout, "\n");
-                    fprintf(stdout, "ToxID:%s\n", tox_id_hex);
+                    fprintf(stdout, "ToxID:%s\n", toxid_hbuf);
                     fprintf(stdout, "\n");
                     fprintf(stdout, "#############################################################\n");
                     fprintf(stdout, "#############################################################\n");
