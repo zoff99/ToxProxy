@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS += -g -O3 -fPIC -I./
 LIBS = $(shell pkg-config --cflags --libs libsodium libcurl) -pthread
-TP_CFLAGS = -Wall
+TP_CFLAGS = -Wall -Wextra  -std=c99 -pedantic
 
 ToxProxy: ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a
 	$(CC) $(CFLAGS) $(TP_CFLAGS) ToxProxy.c toxcore_amalgamation.a $(LIBS) -o ToxProxy
