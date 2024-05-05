@@ -1,5 +1,5 @@
 @Table
-public class group
+public class tgroup
 {
     @PrimaryKey
     public String groupid;

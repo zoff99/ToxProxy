@@ -183,6 +183,10 @@ uint32_t tox_public_key_hex_size = 0; //initialized in main
 uint32_t tox_public_key_hex_size_without_null_termin = 0; //initialized in main
 uint32_t tox_address_hex_size = 0; //initialized in main
 uint32_t tox_address_hex_size_without_null_termin = 0; //initialized in main
+
+const uint32_t tox_group_key_hex_size = TOX_GROUP_CHAT_ID_SIZE * 2 + 1;
+const uint32_t tox_group_key_hex_size_without_null_termin = TOX_GROUP_CHAT_ID_SIZE * 2;
+
 int tox_loop_running = 1;
 bool masterIsOnline = false;
 #define PROXY_PORT_TOR_DEFAULT 9050
@@ -300,14 +304,14 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
 // ---------- database functions ----------
 // ---------- database functions ----------
 
-void shutdown_db()
+static void shutdown_db()
 {
     dbg(LOGLEVEL_INFO, "shutting down db");
     OrmaDatabase_shutdown(o);
     dbg(LOGLEVEL_INFO, "shutting db DONE");
 }
 
-void create_db()
+static void create_db()
 {
     dbg(LOGLEVEL_INFO, "CSORMA version: %s", csorma_get_version());
     dbg(LOGLEVEL_INFO, "CSORMA SQLite version: %s", csorma_get_sqlite_version());
@@ -317,13 +321,13 @@ void create_db()
 
 
     {
-    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group\" ("
+    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Tgroup\" ("
     "      \"groupid\" TEXT,    "
     "      \"is_silent\" BOOLEAN,    "
     "      PRIMARY KEY(\"groupid\")    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Group");
+    dbg(LOGLEVEL_INFO, "creating table: Tgroup");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
@@ -376,13 +380,25 @@ void create_db()
     }
 }
 
-void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bool is_master)
+static void add_group_to_db(const char *groupidhex, const uint32_t len)
+{
+    Tgroup *g = orma_new_Tgroup(o->db);
+    g->groupid = csc(groupidhex, len);
+    g->is_silent = false;
+    int64_t inserted_id = orma_insertIntoTgroup(g);
+    dbg(LOGLEVEL_INFO, "added group to db, inserted id: %lld", (long long)inserted_id);
+    orma_free_Tgroup(g);
+}
+
+static void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bool is_master)
 {
     Friend *f = orma_new_Friend(o->db);
     f->pubkey = csc(pubkeyhex, len);
     f->is_master = is_master;
+    f->is_silent = false;
     int64_t inserted_id = orma_insertIntoFriend(f);
     dbg(LOGLEVEL_INFO, "added friend to db, inserted id: %lld", (long long)inserted_id);
+    orma_free_Friend(f);
 }
 
 // ---------- database functions ----------
@@ -1020,10 +1036,10 @@ void writeConferenceMessageHelper(Tox *tox, const uint8_t *conference_id, const 
 {
     if (is_group == 1)
     {
-        char group_id_hex[TOX_GROUP_CHAT_ID_SIZE * 2 + 1];
+        char group_id_hex[tox_group_key_hex_size];
         CLEAR(group_id_hex);
 
-        bin2upHex(conference_id, TOX_GROUP_CHAT_ID_SIZE, group_id_hex, (TOX_GROUP_CHAT_ID_SIZE * 2 + 1));
+        bin2upHex(conference_id, TOX_GROUP_CHAT_ID_SIZE, group_id_hex, (tox_group_key_hex_size));
         writeConferenceMessage(tox, group_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex, is_group);
     }
     else
@@ -1150,7 +1166,15 @@ bool is_master(const char *public_key_hex)
     }
 }
 
-void getPubKeyHex_friendnumber(Tox *tox, uint32_t friend_number, char *pubKeyHex)
+void getGroupIdHex_groupnumber(const Tox *tox, uint32_t group_number, char *hex)
+{
+    uint8_t _bin[tox_public_key_size()];
+    CLEAR(_bin);
+    tox_group_get_chat_id(tox, group_number, _bin, NULL);
+    bin2upHex(_bin, TOX_GROUP_CHAT_ID_SIZE, hex, tox_group_key_hex_size);
+}
+
+void getPubKeyHex_friendnumber(const Tox *tox, uint32_t friend_number, char *pubKeyHex)
 {
     uint8_t public_key_bin[tox_public_key_size()];
     CLEAR(public_key_bin);
@@ -1158,7 +1182,7 @@ void getPubKeyHex_friendnumber(Tox *tox, uint32_t friend_number, char *pubKeyHex
     bin2upHex(public_key_bin, tox_public_key_size(), pubKeyHex, tox_public_key_hex_size);
 }
 
-bool is_master_friendnumber(Tox *tox, uint32_t friend_number)
+bool is_master_friendnumber(const Tox *tox, uint32_t friend_number)
 {
     bool ret = false;
     char *pubKeyHex = calloc(1, tox_public_key_hex_size);
@@ -2039,12 +2063,31 @@ static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *inv
     self_nick[nick_len] = '\0';
 
     Tox_Err_Group_Invite_Accept error;
-    tox_group_invite_accept(tox, friend_number, invite_data, length,
+    uint32_t new_grp_num = tox_group_invite_accept(tox, friend_number, invite_data, length,
                                  (const uint8_t *)self_nick, nick_len, NULL, 0,
                                  &error);
 
-    dbg(2, "tox_group_invite_accept:%d", error);
-    updateToxSavedata(tox);
+    if (new_grp_num == UINT32_MAX)
+    {
+        dbg(LOGLEVEL_ERROR, "tox_group_invite_accept failed");
+    }
+    else
+    {
+        uint8_t _txp_group_id_bin[tox_group_key_hex_size];
+        CLEAR(_txp_group_id_bin);
+        Tox_Err_Group_State_Queries err;
+        tox_group_get_chat_id(tox, new_grp_num, _txp_group_id_bin, &err);
+        if (err == TOX_ERR_GROUP_STATE_QUERIES_OK)
+        {
+            char _txp_group_id_hex[tox_group_key_hex_size];
+            CLEAR(_txp_group_id_hex);
+            bin2upHex(_txp_group_id_bin, TOX_GROUP_CHAT_ID_SIZE, _txp_group_id_hex, tox_group_key_hex_size);
+            add_group_to_db(_txp_group_id_hex, tox_group_key_hex_size_without_null_termin);
+        }
+
+        dbg(LOGLEVEL_INFO, "tox_group_invite_accept:%d", error);
+        updateToxSavedata(tox);
+    }
 }
 
 
@@ -2090,6 +2133,58 @@ static void group_join_fail_cb(Tox *tox, uint32_t group_number, Tox_Group_Join_F
 {
     dbg(2, "Joining group %d failed. reason: %d", group_number, fail_type);
     updateToxSavedata(tox);
+}
+
+static void add_all_groups_to_db(const Tox *tox)
+{
+    size_t num_groups = tox_group_get_number_groups(tox);
+    if (num_groups < 1)
+    {
+        return;
+    }
+    uint32_t *grouplist = calloc(num_groups, sizeof(uint32_t));
+    if (grouplist == NULL)
+    {
+        return;
+    }
+    tox_group_get_grouplist(tox, grouplist);
+    for(size_t k=0;k<num_groups;k++)
+    {
+        uint32_t gnum = grouplist[k];
+        dbg(LOGLEVEL_DEBUG, "gnum=%d", gnum);
+        char *groupIdHex = calloc(1, tox_group_key_hex_size);
+        getGroupIdHex_groupnumber(tox, gnum, groupIdHex);
+        dbg(LOGLEVEL_DEBUG, "gnum=%s", groupIdHex);
+        add_group_to_db(groupIdHex, tox_group_key_hex_size_without_null_termin);
+        free(groupIdHex);
+    }
+    free(grouplist);
+}
+
+static void add_all_friends_to_db(const Tox *tox)
+{
+    size_t num_friends = tox_self_get_friend_list_size(tox);
+    if (num_friends < 1)
+    {
+        return;
+    }
+    uint32_t *friend_list = calloc(num_friends, sizeof(uint32_t));
+    if (friend_list == NULL)
+    {
+        return;
+    }
+    tox_self_get_friend_list(tox, friend_list);
+    for(size_t k=0;k<num_friends;k++)
+    {
+        uint32_t fnum = friend_list[k];
+        // dbg(LOGLEVEL_DEBUG, "fnum=%d", fnum);
+        char *pubKeyHex = calloc(1, tox_public_key_hex_size);
+        getPubKeyHex_friendnumber(tox, fnum, pubKeyHex);
+        add_friend_to_db(pubKeyHex, tox_public_key_hex_size_without_null_termin,
+            is_master_friendnumber(tox, fnum));
+        free(pubKeyHex);
+    }
+    free(friend_list);
 }
 
 int main(int argc, char *argv[])
@@ -2210,6 +2305,9 @@ int main(int argc, char *argv[])
     tox_address_hex_size = tox_address_size() * 2 + 1;
     tox_address_hex_size_without_null_termin = tox_address_size() * 2;
 
+    add_all_groups_to_db(tox);
+    add_all_friends_to_db(tox);
+
     const char *name = "ToxProxy";
     tox_self_set_name(tox, (uint8_t *) name, strlen(name), NULL);
 
@@ -2240,6 +2338,7 @@ int main(int argc, char *argv[])
         {
             dbg(LOGLEVEL_DEBUG, "inserted toxid: %lld", (long long)inserted_id);
         }
+        orma_free_Self(p);
         }
     }
     else
