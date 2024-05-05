@@ -151,7 +151,9 @@ FILE *logfile = NULL;
 const char *log_filename = "toxblinkenwall.log";
 #endif
 
-const char *save_dir = "./db";
+const char *save_dir = "./db/";
+
+const char *dbfilename = "toxproxy.db";
 
 const char *savedata_filename = "./db/savedata.tox";
 const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
@@ -293,17 +295,17 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
 
 void shutdown_db()
 {
-    printf("STUB: shutting down db\n");
+    dbg(LOGLEVEL_INFO, "shutting down db");
     OrmaDatabase_shutdown(o);
-    printf("STUB: shutting db DONE\n");
+    dbg(LOGLEVEL_INFO, "shutting db DONE");
 }
 
 void create_db()
 {
-    printf("STUB: CSORMA version: %s\n", csorma_get_version());
-    printf("STUB: CSORMA SQLite version: %s\n", csorma_get_sqlite_version());
-    const char *db_dir = "./";
-    const char *db_filename = "stub.db";
+    dbg(LOGLEVEL_INFO, "CSORMA version: %s", csorma_get_version());
+    dbg(LOGLEVEL_INFO, "CSORMA SQLite version: %s", csorma_get_sqlite_version());
+    const char *db_dir = save_dir;
+    const char *db_filename = dbfilename;
     o = OrmaDatabase_init((uint8_t*)db_dir, strlen(db_dir), (uint8_t*)db_filename, strlen(db_filename));
 
     {
@@ -314,9 +316,9 @@ void create_db()
     "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
     "    );    "
     ;
-    printf("STUB: creating table: Group\n");
+    dbg(LOGLEVEL_INFO, "creating table: Group");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    printf("STUB: res1: %d\n", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Friend\" ("
@@ -326,9 +328,9 @@ void create_db()
     "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
     "    );    "
     ;
-    printf("STUB: creating table: Friend\n");
+    dbg(LOGLEVEL_INFO, "creating table: Friend");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    printf("STUB: res1: %d\n", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Message\" ("
@@ -340,9 +342,9 @@ void create_db()
     "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
     "    );    "
     ;
-    printf("STUB: creating table: Message\n");
+    dbg(LOGLEVEL_INFO, "creating table: Message");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    printf("STUB: res1: %d\n", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
 }
 
@@ -2061,6 +2063,7 @@ int main(int argc, char *argv[])
     fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
     dbg(2, "ToxProxy version: %s", global_version_string);
 
+    mkdir(save_dir, S_IRWXU);
     create_db();
 
     use_tor = 0;
@@ -2137,8 +2140,6 @@ int main(int argc, char *argv[])
                 return (-2);
         }
     }
-
-    mkdir(save_dir, S_IRWXU);
 
     read_token_from_file();
 
