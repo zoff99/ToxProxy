@@ -181,6 +181,7 @@ TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 
 uint32_t tox_public_key_hex_size = 0; //initialized in main
 uint32_t tox_address_hex_size = 0; //initialized in main
+uint32_t tox_address_hex_size_without_null_termin = 0; //initialized in main
 int tox_loop_running = 1;
 bool masterIsOnline = false;
 #define PROXY_PORT_TOR_DEFAULT 9050
@@ -2185,6 +2186,7 @@ int main(int argc, char *argv[])
 
     tox_public_key_hex_size = tox_public_key_size() * 2 + 1;
     tox_address_hex_size = tox_address_size() * 2 + 1;
+    tox_address_hex_size_without_null_termin = tox_address_size() * 2;
 
     const char *name = "ToxProxy";
     tox_self_set_name(tox, (uint8_t *) name, strlen(name), NULL);
@@ -2198,6 +2200,31 @@ int main(int argc, char *argv[])
     tox_self_get_address(tox, tox_id_bin);
     char tox_id_hex[tox_address_hex_size];
     bin2upHex(tox_id_bin, tox_address_size(), tox_id_hex, tox_address_hex_size);
+
+    {
+    Self *p = orma_updateSelf(o->db);
+    int64_t affected_rows3 = p->toxidSet(p, csc(tox_id_hex, tox_address_hex_size_without_null_termin))->execute(p);
+    if (affected_rows3 < 1)
+    {
+        {
+        Self *p = orma_new_Self(o->db);
+        p->toxid = csc(tox_id_hex, tox_address_hex_size_without_null_termin);
+        int64_t inserted_id = orma_insertIntoSelf(p);
+        if (inserted_id < 0)
+        {
+            dbg(LOGLEVEL_ERROR, "inserting toxid failed");
+        }
+        else
+        {
+            dbg(LOGLEVEL_DEBUG, "inserted toxid: %lld", (long long)inserted_id);
+        }
+        }
+    }
+    else
+    {
+        dbg(LOGLEVEL_DEBUG, "updated toxid: %lld", (long long)affected_rows3);
+    }
+    }
 
 #ifdef WRITE_MY_TOXID_TO_FILE
     FILE *fp = fopen(my_toxid_filename_txt, "wb");
