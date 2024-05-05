@@ -25,7 +25,9 @@ static const char csorma_global_version_asan_string[] = "0.99.0-ASAN";
 // ----------- version -----------
 // ----------- version -----------
 
+#ifndef CSORMA_TRACE
 #define CSORMA_TRACE 0 // to log all SQL statements set this to 1
+#endif
 
 #define __SELECT_START "SELECT * FROM "
 #define __SELECT_COUNT_START "SELECT count(*) as count FROM "
