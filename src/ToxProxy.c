@@ -308,29 +308,40 @@ void create_db()
     const char *db_filename = dbfilename;
     o = OrmaDatabase_init((uint8_t*)db_dir, strlen(db_dir), (uint8_t*)db_filename, strlen(db_filename));
 
+
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group\" ("
-    "      \"id\" INTEGER,    "
     "      \"groupid\" TEXT,    "
     "      \"is_silent\" BOOLEAN,    "
-    "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
+    "      PRIMARY KEY(\"groupid\")    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Group");
+    dbg(LOGLEVEL_INFO, "creating table: Group\n");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Friend\" ("
-    "      \"id\" INTEGER,    "
     "      \"pubkey\" TEXT,    "
     "      \"is_master\" BOOLEAN,    "
-    "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
+    "      \"is_silent\" BOOLEAN,    "
+    "      PRIMARY KEY(\"pubkey\")    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Friend");
+    dbg(LOGLEVEL_INFO, "creating table: Friend\n");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
+    }
+    {
+    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Lov\" ("
+    "      \"key\" TEXT,    "
+    "      \"value\" TEXT,    "
+    "      PRIMARY KEY(\"key\")    "
+    "    );    "
+    ;
+    dbg(LOGLEVEL_INFO, "creating table: Lov\n");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Message\" ("
@@ -342,12 +353,21 @@ void create_db()
     "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Message");
+    dbg(LOGLEVEL_INFO, "creating table: Message\n");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
+    }
+    {
+    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Self\" ("
+    "      \"toxid\" TEXT,    "
+    "      PRIMARY KEY(\"toxid\")    "
+    "    );    "
+    ;
+    dbg(LOGLEVEL_INFO, "creating table: Self\n");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
     }
 }
-
 
 time_t get_unix_time(void)
 {

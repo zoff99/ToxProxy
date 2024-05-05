@@ -1,9 +1,7 @@
 @Table
 public class group
 {
-    @PrimaryKey(autoincrement = true)
-    public long id; // uniqe message id!!
-    @Column
+    @PrimaryKey
     public String groupid;
     @Column
     public boolean is_silent;

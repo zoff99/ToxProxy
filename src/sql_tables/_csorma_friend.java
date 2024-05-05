@@ -1,10 +1,10 @@
 @Table
 public class friend
 {
-    @PrimaryKey(autoincrement = true)
-    public long id; // uniqe message id!!
-    @Column
+    @PrimaryKey
     public String pubkey;
     @Column
     public boolean is_master;
+    @Column
+    public boolean is_silent;
 }
