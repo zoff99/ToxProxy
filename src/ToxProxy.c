@@ -180,6 +180,7 @@ TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 #define MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR 2000 // limit ACK files per directory
 
 uint32_t tox_public_key_hex_size = 0; //initialized in main
+uint32_t tox_public_key_hex_size_without_null_termin = 0; //initialized in main
 uint32_t tox_address_hex_size = 0; //initialized in main
 uint32_t tox_address_hex_size_without_null_termin = 0; //initialized in main
 int tox_loop_running = 1;
@@ -294,6 +295,11 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
     dbg(log_level, "ToxCore LogMsg: [%d] %s:%d - %s:%s", (int) level, file, (int) line, func, message);
 }
 
+// ---------- database functions ----------
+// ---------- database functions ----------
+// ---------- database functions ----------
+// ---------- database functions ----------
+
 void shutdown_db()
 {
     dbg(LOGLEVEL_INFO, "shutting down db");
@@ -369,6 +375,19 @@ void create_db()
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
 }
+
+void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bool is_master)
+{
+    Friend *f = orma_new_Friend(o->db);
+    f->pubkey = csc(pubkeyhex, len);
+    f->is_master = is_master;
+    int64_t inserted_id = orma_insertIntoFriend(f);
+    dbg(LOGLEVEL_INFO, "added friend to db, inserted id: %lld", (long long)inserted_id);
+}
+
+// ---------- database functions ----------
+// ---------- database functions ----------
+// ---------- database functions ----------
 
 time_t get_unix_time(void)
 {
@@ -1175,6 +1194,7 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
         // add first friend as master for this proxy
         add_master(public_key_hex);
         tox_friend_add_norequest(tox, public_key, NULL);
+        add_friend_to_db(public_key_hex, tox_public_key_hex_size_without_null_termin, true);
         updateToxSavedata(tox);
     } else {
         // once I have a master, I don't add friend's on request, only by command of my master!
@@ -1539,6 +1559,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
                 uint8_t public_key_bin[tox_public_key_size()];
                 hex_string_to_bin(pubKey, tox_public_key_size() * 2, (char *) public_key_bin, tox_public_key_size());
                 tox_friend_add_norequest(tox, public_key_bin, NULL);
+                add_friend_to_db(pubKey, tox_public_key_hex_size_without_null_termin, false);
                 updateToxSavedata(tox);
             } else if (
                           strlen((char *) message_text) == strlen("DELETE_EVERYTHING")
@@ -2185,6 +2206,7 @@ int main(int argc, char *argv[])
     Tox *tox = openTox();
 
     tox_public_key_hex_size = tox_public_key_size() * 2 + 1;
+    tox_public_key_hex_size_without_null_termin = tox_public_key_size() * 2;
     tox_address_hex_size = tox_address_size() * 2 + 1;
     tox_address_hex_size_without_null_termin = tox_address_size() * 2;
 
