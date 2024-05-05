@@ -88,6 +88,8 @@ static const char global_version_string[] = "2.0.0";
 #include "tox/tox.h"
 #include "tox/toxutil.h"
 
+#include "sql_tables/gen/csorma_runtime.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -707,8 +709,6 @@ void bootstrap(Tox *tox)
 
 bool check_if_group_notifiation_silent(const char* groupid)
 {
-    bool ret = false;
-
     char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
     CLEAR(userDir);
     strcpy(userDir, msgsDir);
@@ -865,11 +865,8 @@ void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, u
     strcat(msgPath, "/");
     strcat(msgPath, timestamp);
 
-    int max_files = MAX_FILES_IN_ONE_MESSAGE_DIR;
-
     if (msg_type == TOX_FILE_KIND_MESSAGEV2_ANSWER) {
         strcat(msgPath, ".txtA");
-        max_files = MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR;
     } else if (msg_type == TOX_FILE_KIND_MESSAGEV2_SEND) {
         strcat(msgPath, ".txtS");
     }
@@ -1434,7 +1431,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
         // uint32_t ts_sec = tox_messagev2_get_ts_sec(raw_message);
         // uint16_t ts_ms = tox_messagev2_get_ts_ms(raw_message);
         uint32_t text_length = 0;
-        bool res = tox_messagev2_get_message_text(raw_message, (uint32_t) raw_message_len, (bool) false, (uint32_t) 0,
+        bool UNUSED(res) = tox_messagev2_get_message_text(raw_message, (uint32_t) raw_message_len, (bool) false, (uint32_t) 0,
                    message_text, &text_length);
         // toxProxyLog(9, "friend_message_v2_cb:fn=%d res=%d msg=%s", (int) friend_number, (int) res, (char *) message_text);
 
@@ -1583,11 +1580,8 @@ void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
         uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
         uint8_t *pubKeyBin = tox_address_hex_string_to_bin2(pubKeyHex);
 
-        int max_files = MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR;
-
         if (msgFileName[strlen(msgFileName) - 1] == 'A') {
             // TOX_FILE_KIND_MESSAGEV2_ANSWER
-            max_files = MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR;
             tox_messagev2_sync_wrap(fsize, pubKeyBin, TOX_FILE_KIND_MESSAGEV2_ANSWER,
                                     rawMsgData, 665, 987, raw_message2, msgid2);
             toxProxyLog(9, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_ANSWER", raw_message2);
@@ -1978,7 +1972,7 @@ static void group_self_join_cb(Tox *tox, uint32_t group_number, void *user_data)
     updateToxSavedata(tox);
 }
 
-static void group_join_fail_cb(Tox *tox, uint32_t group_number, Tox_Group_Join_Fail fail_type, void *user_data)
+static void group_join_fail_cb(Tox *tox, uint32_t group_number, Tox_Group_Join_Fail fail_type, void *UNUSED(user_data))
 {
     toxProxyLog(2, "Joining group %d failed. reason: %d", group_number, fail_type);
     updateToxSavedata(tox);
