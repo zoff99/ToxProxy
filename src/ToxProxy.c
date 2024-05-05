@@ -316,9 +316,9 @@ void create_db()
     "      PRIMARY KEY(\"groupid\")    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Group\n");
+    dbg(LOGLEVEL_INFO, "creating table: Group");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Friend\" ("
@@ -328,9 +328,9 @@ void create_db()
     "      PRIMARY KEY(\"pubkey\")    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Friend\n");
+    dbg(LOGLEVEL_INFO, "creating table: Friend");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Lov\" ("
@@ -339,9 +339,9 @@ void create_db()
     "      PRIMARY KEY(\"key\")    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Lov\n");
+    dbg(LOGLEVEL_INFO, "creating table: Lov");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Message\" ("
@@ -353,9 +353,9 @@ void create_db()
     "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Message\n");
+    dbg(LOGLEVEL_INFO, "creating table: Message");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Self\" ("
@@ -363,9 +363,9 @@ void create_db()
     "      PRIMARY KEY(\"toxid\")    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Self\n");
+    dbg(LOGLEVEL_INFO, "creating table: Self");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d\n", res1);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
 }
 
