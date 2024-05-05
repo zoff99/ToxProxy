@@ -59,7 +59,6 @@ static const char global_version_string[] = "2.0.0";
 #include <getopt.h>
 #include <fcntl.h>
 #include <assert.h>
-#include <errno.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <netdb.h>
@@ -86,8 +85,21 @@ static const char global_version_string[] = "2.0.0";
 #define MIN_LOGGER_LEVEL LOGGER_LEVEL_INFO
 // define this before including toxcore amalgamation -------
 
-#include <tox/tox.h>
-#include <tox/toxutil.h>
+#include "tox/tox.h"
+#include "tox/toxutil.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef UNUSED
+#elif defined(__GNUC__)
+# define UNUSED(x) UNUSED_ ## x __attribute__((unused))
+#elif defined(__LCLINT__)
+# define UNUSED(x) /*@unused@*/ x
+#else
+# define UNUSED(x) x
+#endif
 
 static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
@@ -2307,3 +2319,6 @@ int main(int argc, char *argv[])
     exit(0);
 }
 
+#ifdef __cplusplus
+}  // extern "C"
+#endif
