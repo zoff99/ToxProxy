@@ -779,7 +779,7 @@ void writeConferenceMessage(Tox *tox, const char *sender_group_key_hex, const ui
 
     //TODO FIXME use message v2 message id / hash instead of timestamp of receiving / processing message!
 
-    char timestamp[strlen("0000-00-00_0000-00,000000") + 1 + 1]; // = "0000-00-00_0000-00,000000";
+    char timestamp[100]; // = "0000-00-00_0000-00,000000";
     CLEAR(timestamp);
 
     struct timeval tv;
@@ -851,7 +851,7 @@ void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, u
 
     //TODO FIXME use message v2 message id / hash instead of timestamp of receiving / processing message!
 
-    char timestamp[strlen("0000-00-00_0000-00,000000") + 1 + 1]; // = "0000-00-00_0000-00,000000";
+    char timestamp[100]; // = "0000-00-00_0000-00,000000";
     CLEAR(timestamp);
 
     struct timeval tv;
