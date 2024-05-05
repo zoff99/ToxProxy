@@ -3,14 +3,17 @@ CFLAGS += -g -O3 -fPIC -I./
 LIBS = $(shell pkg-config --cflags --libs libsodium libcurl) -pthread
 TP_CFLAGS = -Wall -Wextra -Wno-unused-parameter -std=c99 -pedantic
 
-ToxProxy: ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a
-	$(CC) $(CFLAGS) $(TP_CFLAGS) ToxProxy.c toxcore_amalgamation.a $(LIBS) -o ToxProxy
+ToxProxy: ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a sql_tables/gen/sqlite3.a
+	$(CC) $(CFLAGS) $(TP_CFLAGS) ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a sql_tables/gen/sqlite3.a $(LIBS) -o ToxProxy
 
 toxcore_amalgamation.a: toxcore_amalgamation.o
 	ar rcs toxcore_amalgamation.a toxcore_amalgamation.o
 
 toxcore_amalgamation.o: toxcore_amalgamation_no_toxav.c
 	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+
+sql_tables/gen/sqlite3.a: sql_tables/gen/csorma.a
+	cd ./sql_tables/gen/; make sqlite3.a
 
 sql_tables/gen/csorma.a: sql_tables/*.java
 	cd csorma/;javac csorma_generator.java

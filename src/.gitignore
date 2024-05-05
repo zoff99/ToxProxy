@@ -1,3 +1,7 @@
 toxcore_amalgamation.o
 toxcore_amalgamation.a
 sql_tables/gen/
+db/
+stub.db
+toxblinkenwall.log
+toxid.txt

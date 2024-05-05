@@ -181,6 +181,7 @@ pthread_t notification_thread;
 int notification_thread_stop = 1;
 int need_send_notification = 0;
 
+OrmaDatabase *o = NULL;
 
 // functions defs ------------
 int ping_push_service();
@@ -276,6 +277,62 @@ void tox_log_cb__custom(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_
 {
     toxProxyLog(9, "ToxCore LogMsg: [%d] %s:%d - %s:%s", (int) level, file, (int) line, func, message);
 }
+
+void shutdown_db()
+{
+    printf("STUB: shutting down db\n");
+    OrmaDatabase_shutdown(o);
+    printf("STUB: shutting db DONE\n");
+}
+
+void create_db()
+{
+    printf("STUB: CSORMA version: %s\n", csorma_get_version());
+    printf("STUB: CSORMA SQLite version: %s\n", csorma_get_sqlite_version());
+    const char *db_dir = "./";
+    const char *db_filename = "stub.db";
+    o = OrmaDatabase_init((uint8_t*)db_dir, strlen(db_dir), (uint8_t*)db_filename, strlen(db_filename));
+
+    {
+    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group\" ("
+    "      \"id\" INTEGER,    "
+    "      \"groupid\" TEXT,    "
+    "      \"is_silent\" BOOLEAN,    "
+    "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
+    "    );    "
+    ;
+    printf("STUB: creating table: Group\n");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    printf("STUB: res1: %d\n", res1);
+    }
+    {
+    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Friend\" ("
+    "      \"id\" INTEGER,    "
+    "      \"pubkey\" TEXT,    "
+    "      \"is_master\" BOOLEAN,    "
+    "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
+    "    );    "
+    ;
+    printf("STUB: creating table: Friend\n");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    printf("STUB: res1: %d\n", res1);
+    }
+    {
+    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Message\" ("
+    "      \"id\" INTEGER,    "
+    "      \"pubkey\" TEXT,    "
+    "      \"datahex\" TEXT,    "
+    "      \"mtype\" INTEGER,    "
+    "      \"isgroupmsg\" BOOLEAN,    "
+    "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
+    "    );    "
+    ;
+    printf("STUB: creating table: Message\n");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    printf("STUB: res1: %d\n", res1);
+    }
+}
+
 
 time_t get_unix_time(void)
 {
@@ -1991,6 +2048,8 @@ int main(int argc, char *argv[])
     fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
     toxProxyLog(2, "ToxProxy version: %s", global_version_string);
 
+    create_db();
+
     use_tor = 0;
     int opt;
     const char     *short_opt = "T";
@@ -2303,6 +2362,8 @@ int main(int argc, char *argv[])
 
     curl_global_cleanup();
 #endif
+
+    shutdown_db();
 
     if (logfile) {
         fclose(logfile);
