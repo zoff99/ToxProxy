@@ -340,13 +340,13 @@ static void create_db()
 
 
     {
-    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Tgroup\" ("
+    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group\" ("
     "      \"groupid\" TEXT,    "
     "      \"is_silent\" BOOLEAN,    "
     "      PRIMARY KEY(\"groupid\")    "
     "    );    "
     ;
-    dbg(LOGLEVEL_INFO, "creating table: Tgroup");
+    dbg(LOGLEVEL_INFO, "creating table: Group");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
@@ -401,12 +401,12 @@ static void create_db()
 
 static void add_group_to_db(const char *groupidhex, const uint32_t len)
 {
-    Tgroup *g = orma_new_Tgroup(o->db);
+    Group *g = orma_new_Group(o->db);
     g->groupid = csc(groupidhex, len);
     g->is_silent = false;
-    int64_t inserted_id = orma_insertIntoTgroup(g);
+    int64_t inserted_id = orma_insertIntoGroup(g);
     dbg(LOGLEVEL_INFO, "added group to db, inserted id: %lld", (long long)inserted_id);
-    orma_free_Tgroup(g);
+    orma_free_Group(g);
 }
 
 static void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bool is_master)
