@@ -102,6 +102,7 @@ p->name = csb("Larry Wilson");
 p->address = csb("1 Larry Drive, Sunset Town");
 p->social_number = 381739;
 int64_t inserted_id = orma_insertIntoPerson(p);
+orma_free_Person(p);
 printf("STUB: inserted id: %lld\n", (long long)inserted_id);
 } // HINT: using blocks here to have `p` be a local var
 ```
@@ -130,6 +131,7 @@ p->name = csb("Martha Liebowitz");
 p->address = csb("2035 Morning Road, Big City");
 p->social_number = 139807;
 int64_t inserted_id = orma_insertIntoPerson(p);
+orma_free_Person(p);
 printf("STUB: inserted id: %lld\n", (long long)inserted_id);
 }
 ```

@@ -226,7 +226,9 @@ int64_t __insert_into___@@@TABLElc@@@__(__@@@TABLE@@@__ *t)
     }
 
     t->sql_start = csorma_str_con(t->sql_start, __INSERT_START, strlen(__INSERT_START));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
     t->sql_start = csorma_str_con(t->sql_start, __TABLE_NAME, strlen(__TABLE_NAME));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
 
     sqlite3_stmt *res;
     csorma_s *sql_txt = csorma_str_con2(NULL, t->sql_start);
@@ -398,7 +400,9 @@ __@@@TABLE@@@__* __update___@@@TABLElc@@@__(void *db)
     CSORMA_LOGGER_DEBUG("db: %p", db);
     __@@@TABLE@@@__ *t = __new___@@@TABLElc@@@__(db);
     t->sql_start = csorma_str_con(t->sql_start, __UPDATE_START, strlen(__UPDATE_START));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
     t->sql_start = csorma_str_con(t->sql_start, __TABLE_NAME, strlen(__TABLE_NAME));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
     return t;
 }
 
@@ -407,7 +411,9 @@ __@@@TABLE@@@__* __delete_from___@@@TABLElc@@@__(void *db)
     CSORMA_LOGGER_DEBUG("db: %p", db);
     __@@@TABLE@@@__ *t = __new___@@@TABLElc@@@__(db);
     t->sql_start = csorma_str_con(t->sql_start, __DELETE_START, strlen(__DELETE_START));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
     t->sql_start = csorma_str_con(t->sql_start, __TABLE_NAME, strlen(__TABLE_NAME));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
     return t;
 }
 
