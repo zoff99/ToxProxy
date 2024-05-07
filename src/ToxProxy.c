@@ -2162,7 +2162,6 @@ static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *inv
     }
 }
 
-
 static void group_peer_join_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, void *UNUSED(user_data))
 {
     dbg(2, "Peer %d joined group %d", peer_id, group_number);
