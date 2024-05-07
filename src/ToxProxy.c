@@ -99,7 +99,7 @@ extern "C" {
 # define UNUSED(x) x
 #endif
 
-// -------- bin2upper_case_hex (the out buffer will have a NULL terminator at the end) --------
+// -------- bin2upper_case_hex (the out "_B2UH_buf" will have a NULL terminator at the end) --------
 #define TO_UPPER_HEX_CHAR(val) ((val) < 10 ? (val) + '0' : (val) - 10 + 'A')
 #define TO_UPPER_HEX_STRING(buffer, hex_buffer, size) do { \
     for (int32_t i = 0; i < (int32_t)size; i++) { \
@@ -112,11 +112,27 @@ extern "C" {
 // HINT: buffer -> const char* input buffer with bytes
 //       size   -> length in bytes of the input buffer WITHOUT NULL terminator
 //
-#define B2UH(_B2UH_buf, buffer, size) do { \
+#define B2UH(buffer, size, _B2UH_buf) do { \
     TO_UPPER_HEX_STRING(buffer, _B2UH_buf, size); \
     _B2UH_buf[2*size] = '\0'; \
 } while(0)
 // -------- bin2upper_case_hex (the out buffer will have a NULL terminator at the end) --------
+
+// -------- any_case_hex2bin (the in buffer "hex_str" must have a NULL terminator at the end, the out buffer will NOT be NULL terminated) --------
+// WARNING: !! if you put garbage in you get garbabe out !!
+#define HEX_TO_BYTE_UPPER(hex) ((hex >= 'A' && hex <= 'F') ? (hex - 'A' + 10) : (hex - '0'))
+#define HEX_TO_BYTE_LOWER(hex) ((hex >= 'a' && hex <= 'f') ? (hex - 'a' + 10) : (hex - '0'))
+#define HEX_TO_BYTE_CASE(hex) ((hex >= 'A' && hex <= 'F') ? (HEX_TO_BYTE_UPPER(hex)) : (HEX_TO_BYTE_LOWER(hex)))
+#define H2B(hex_str, _H2B_buf) \
+    do { \
+        int i; \
+        for (i = 0; hex_str[2 * i] && hex_str[2 * i + 1]; ++i) { \
+            _H2B_buf[i] = (HEX_TO_BYTE_CASE(hex_str[2 * i]) << 4) + HEX_TO_BYTE_CASE(hex_str[2 * i + 1]); \
+        } \
+    } while (0)
+// WARNING: !! if you put garbage in you get garbabe out !!
+// -------- any_case_hex2bin (the in buffer "hex_str" must have a NULL terminator at the end, the out buffer will NOT be NULL terminated) --------
+
 
 static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
@@ -2336,7 +2352,11 @@ int main(int argc, char *argv[])
     tox_self_get_address(tox, tox_id_bin);
 
     char toxid_hbuf[2*tox_address_size() + 1];
-    B2UH(toxid_hbuf, tox_id_bin, tox_address_size());
+    B2UH(tox_id_bin, tox_address_size(), toxid_hbuf);
+
+    // char toxid_binbuf[tox_address_size() + 1];
+    // memset(toxid_binbuf, 0, tox_address_size() + 1);
+    // H2B(toxid_hbuf, toxid_binbuf);
 
     {
     Self *p = orma_updateSelf(o->db);
