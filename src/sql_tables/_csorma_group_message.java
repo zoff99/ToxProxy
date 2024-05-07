@@ -7,7 +7,7 @@ public class group_message
     @Column
     public String groupid;
     @Column
-    public String pubkey;
+    public String peerpubkey;
     @Column
     public String datahex;
     @Column

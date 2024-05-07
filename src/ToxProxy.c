@@ -402,7 +402,7 @@ static void create_db()
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group_message\" ("
     "  \"id\" INTEGER,"
     "  \"groupid\" TEXT,"
-    "  \"pubkey\" TEXT,"
+    "  \"peerpubkey\" TEXT,"
     "  \"datahex\" TEXT,"
     "  \"message_id\" INTEGER,"
     "  \"timstamp_recv\" INTEGER,"
@@ -912,9 +912,11 @@ bool check_if_group_notifiation_silent(const char* groupid)
     if (file_exists(silentFilePath))
     {
         dbg(0, "group: %s is silent", groupid);
+        free(silentFilePath);
         return true;
     }
 
+    free(silentFilePath);
     return false;
 }
 
@@ -2092,6 +2094,30 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             sprintf((char *)newmsg, "%02x%02x%02x%02x:", *t4, *t3, *t2, *t1); // BEWARE: this adds a NULL byte at the end
             memcpy(newmsg + HEX_MSG_NUM_LEN_COLON, message, length);
             newmsg[length + HEX_MSG_NUM_LEN_COLON] = 0;
+
+            // ----- SQL -----
+            Group_message *gm = orma_new_Group_message(o->db);
+            // -------
+            // -------
+            char group_id_uhex[2*TOX_GROUP_CHAT_ID_SIZE + 1];
+            B2UH(group_id_buffer, TOX_GROUP_CHAT_ID_SIZE, group_id_uhex);
+            gm->groupid = csb(group_id_uhex);
+            // -------
+            gm->peerpubkey = csb(public_key_hex);
+            // -------
+            char group_msg_uhex[2*length + 1];
+            B2UH(message, length, group_msg_uhex);
+            gm->datahex = csb(group_msg_uhex);
+            // -------
+            gm->message_id = message_id;
+            // -------
+            gm->timstamp_recv = (uint32_t)get_unix_time();
+            // -------
+            // -------
+            int64_t inserted_id = orma_insertIntoGroup_message(gm);
+            orma_free_Group_message(gm);
+            dbg(LOGLEVEL_INFO, "group_message inserted id: %lld\n", (long long)inserted_id);
+            // ----- SQL -----
 
             writeConferenceMessageHelper(tox, group_id_buffer, newmsg, (length + HEX_MSG_NUM_LEN_COLON), public_key_hex, 1);
             free(newmsg);
