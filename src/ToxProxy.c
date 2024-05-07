@@ -464,6 +464,20 @@ void bin2upHex(const uint8_t *bin, uint32_t bin_size, char *hex, uint32_t hex_si
     }
 }
 
+int hex_string_to_bin(const char *hex_string, size_t hex_len, char *output, size_t output_size)
+{
+    if (output_size == 0 || hex_len != output_size * 2) {
+        return -1;
+    }
+
+    for (size_t i = 0; i < output_size; ++i) {
+        sscanf(hex_string, "%2hhx", (unsigned char *) &output[i]);
+        hex_string += 2;
+    }
+
+    return 0;
+}
+
 unsigned int char_to_int(char c)
 {
     if (c >= '0' && c <= '9') {
@@ -1221,20 +1235,6 @@ bool is_master_friendnumber(const Tox *tox, uint32_t friend_number)
     ret = is_master(pubKeyHex);
     free(pubKeyHex);
     return ret;
-}
-
-int hex_string_to_bin(const char *hex_string, size_t hex_len, char *output, size_t output_size)
-{
-    if (output_size == 0 || hex_len != output_size * 2) {
-        return -1;
-    }
-
-    for (size_t i = 0; i < output_size; ++i) {
-        sscanf(hex_string, "%2hhx", (unsigned char *) &output[i]);
-        hex_string += 2;
-    }
-
-    return 0;
 }
 
 void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *message, size_t UNUSED(length), void *UNUSED(user_data))
