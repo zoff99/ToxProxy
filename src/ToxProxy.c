@@ -81,10 +81,6 @@ static const char global_version_string[] = "2.0.0";
 // gives bin2hex & hex2bin functions for Tox-ID / public-key conversions
 #include <sodium/utils.h>
 
-// define this before including toxcore amalgamation -------
-#define MIN_LOGGER_LEVEL LOGGER_LEVEL_INFO
-// define this before including toxcore amalgamation -------
-
 #include "tox/tox.h"
 #include "tox/toxutil.h"
 
