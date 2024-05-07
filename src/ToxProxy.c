@@ -391,11 +391,26 @@ static void create_db()
     "      \"pubkey\" TEXT,    "
     "      \"datahex\" TEXT,    "
     "      \"mtype\" INTEGER,    "
-    "      \"isgroupmsg\" BOOLEAN,    "
     "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
     "    );    "
     ;
     dbg(LOGLEVEL_INFO, "creating table: Message");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
+    {
+    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group_message\" ("
+    "  \"id\" INTEGER,"
+    "  \"groupid\" TEXT,"
+    "  \"pubkey\" TEXT,"
+    "  \"datahex\" TEXT,"
+    "  \"message_id\" INTEGER,"
+    "  \"timstamp_recv\" INTEGER,"
+    "  \"mtype\" INTEGER,"
+    "  PRIMARY KEY(\"id\" AUTOINCREMENT)"
+    ");"
+    ;
+    dbg(LOGLEVEL_INFO, "creating table: Group_message");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
