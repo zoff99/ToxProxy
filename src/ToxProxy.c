@@ -1867,6 +1867,9 @@ void send_sync_msgs_of_friend(Tox *tox, char *pubKeyHex)
     free(friendDir);
 }
 
+/*
+ * HINT: this function send friend messages and conference and group messages to master
+ */
 void send_sync_msgs(Tox *tox)
 {
     mkdir(msgsDir, S_IRWXU);
