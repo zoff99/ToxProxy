@@ -1390,7 +1390,7 @@ void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE 
 }
 
 void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, TOX_MESSAGE_TYPE UNUSED(type),
-                           const uint8_t *message, size_t length, void *UNUSED(user_data))
+                           const uint8_t *UNUSED(message), size_t UNUSED(length), void *UNUSED(user_data))
 {
     dbg(9, "enter conference_message_cb");
     dbg(0, "received conference text message conf:%d peer:%d", conference_number, peer_number);
@@ -1419,7 +1419,7 @@ void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_n
                 dbg(0, "conference id unknown?");
                 return;
             } else {
-                writeConferenceMessageHelper(tox, conference_id_buffer, message, length, public_key_hex, 0);
+                // ** DISABLE ** // writeConferenceMessageHelper(tox, conference_id_buffer, message, length, public_key_hex, 0);
             }
         }
     }
@@ -1480,12 +1480,12 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                 if (strncmp(dp_m->d_name, ".", 1) != 0 && strncmp(dp_m->d_name, "..", 2) != 0)
                 {
                     // ****************************************
-                    dbg(2, "is_answer_to_synced_message: looping file:001:%s", dp_m->d_name);
+                    // dbg(2, "is_answer_to_synced_message: looping file:001:%s", dp_m->d_name);
 
                     char *friendDir = calloc(1, strlen(msgsDir) + 1 + strlen(dp_m->d_name) + 1);
                     sprintf(friendDir, "%s/%s", msgsDir, dp_m->d_name);
 
-                    dbg(2, "is_answer_to_synced_message: looping file:002:%s", friendDir);
+                    // dbg(2, "is_answer_to_synced_message: looping file:002:%s", friendDir);
 
                     mkdir(msgsDir, S_IRWXU);
                     DIR *dfd = opendir(friendDir);
@@ -1507,25 +1507,25 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                         {
                             if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0)
                             {
-                                dbg(2, "is_answer_to_synced_message: looping file:003:%s", dp->d_name);
+                                // dbg(2, "is_answer_to_synced_message: looping file:003:%s", dp->d_name);
 
                                 int len = strlen(dp->d_name);
                                 const char *last_char = &dp->d_name[len - 1];
                                 if (strncmp(last_char, "_", 1) == 0)
                                 {
-                                    dbg(2, "is_answer_to_synced_message: looping file:004:%s", last_char);
+                                    // dbg(2, "is_answer_to_synced_message: looping file:004:%s", last_char);
 
                                     const char *last_char2 = &dp->d_name[len - END_PART_GLOB_LEN];
                                     char *comp_str = calloc(1, (END_PART_GLOB_LEN + 2));
                                     sprintf(comp_str, "__%s__", msgid2_str);
 
-                                    dbg(2, "is_answer_to_synced_message: looping file:005:%s", last_char2);
+                                    // dbg(2, "is_answer_to_synced_message: looping file:005:%s", last_char2);
 
-                                    dbg(2, "is_answer_to_synced_message: looping file:006:%s END_PART_GLOB_LEN=%d", comp_str, (int)END_PART_GLOB_LEN);
+                                    // dbg(2, "is_answer_to_synced_message: looping file:006:%s END_PART_GLOB_LEN=%d", comp_str, (int)END_PART_GLOB_LEN);
 
                                     if (strncmp(last_char2, comp_str, END_PART_GLOB_LEN) == 0)
                                     {
-                                        dbg(2, "is_answer_to_synced_message: found id %s in %s", comp_str, dp->d_name);
+                                        // dbg(2, "is_answer_to_synced_message: found id %s in %s", comp_str, dp->d_name);
                                         // now delete all files for that id
                                         char *delete_file_glob = calloc(1, 1000);
 
@@ -1536,10 +1536,10 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                                         if (ret_snprintf){}
                                         char *run_cmd = calloc(1, 1000);
                                         sprintf(run_cmd, "rm %s/%s*", friendDir, delete_file_glob);
-                                        dbg(2, "is_answer_to_synced_message: running cmd: %s", run_cmd);
+                                        // dbg(2, "is_answer_to_synced_message: running cmd: %s", run_cmd);
                                         int cmd_res = system(run_cmd);
                                         if (cmd_res){}
-                                        dbg(2, "is_answer_to_synced_message: cmd DONE");
+                                        // dbg(2, "is_answer_to_synced_message: cmd DONE");
                                         free(run_cmd);
                                         free(delete_file_glob);
 
@@ -1577,6 +1577,15 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
 
     dbg(9, "enter friend_read_receipt_message_v2_cb:msgid=%s", msgid2_str);
 
+    // HINT: delete group messages for that incoming receipt, if any
+    Group_message *p = orma_deleteFromGroup_message(o->db);
+    int64_t affected_rows2 = p->message_sync_hashidEq(p, csb(msgid2_str))->execute(p);
+    printf("deleteFromGroup_message: affected rows: %d\n", (int)affected_rows2);
+    if (affected_rows2 > 0)
+    {
+        return;
+    }
+
 	// check if the received msg is confirm conference msg received
 	// also: make long enough pauses in sending messages to master to allow for receipt msgs to come in and get processed.
 
@@ -1594,11 +1603,12 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
 
     if (is_answer_to_synced_message(tox, friend_number, raw_message_data, raw_message_len))
     {
+        dbg(9, "is_answer_to_synced_message:YES");
     }
     else
     {
         dbg(9, "friend_read_receipt_message_v2_cb:call writeMessageHelper");
-        writeMessageHelper(tox, friend_number, raw_message_data, raw_message_len, TOX_FILE_KIND_MESSAGEV2_ANSWER);
+        // ** DISABLE ** // writeMessageHelper(tox, friend_number, raw_message_data, raw_message_len, TOX_FILE_KIND_MESSAGEV2_ANSWER);
     }
 
 #endif
@@ -1649,7 +1659,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             // nicht vom master, also wohl ein freund vom master.
 
             // save the message to storage
-            writeMessageHelper(tox, friend_number, raw_message, raw_message_len, TOX_FILE_KIND_MESSAGEV2_SEND);
+            // ** DISABLE ** // writeMessageHelper(tox, friend_number, raw_message, raw_message_len, TOX_FILE_KIND_MESSAGEV2_SEND);
 
             // send back an ACK, that toxproxy has received the message
             if (raw_message_len >= TOX_PUBLIC_KEY_SIZE)
@@ -1878,6 +1888,13 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
     Group_message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
     {
+        if (i == 0)
+        {
+            if (ping_push_service() == 1)
+            {
+                ping_push_service();
+            }
+        }
         printf("GM: id=%ld\n", (*pd)->id);
         printf("GM: message_id=\"%d\"\n", (uint32_t)(*pd)->message_id);
         printf("GM: message_text_length_hex=\"%d\"\n", (*pd)->datahex->l);
@@ -1942,6 +1959,8 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
  */
 void send_sync_msgs(Tox *tox)
 {
+    send_sync_msgs_of_friend__groupmsgs(tox);
+
     mkdir(msgsDir, S_IRWXU);
 
     // loop over all directories = public-keys of friends we have received messages from
@@ -1956,11 +1975,9 @@ void send_sync_msgs(Tox *tox)
 
     while ((dp = readdir(dfd)) != NULL) {
         if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0) {
-            send_sync_msgs_of_friend(tox, dp->d_name);
+            // ** DISBALE ** // send_sync_msgs_of_friend(tox, dp->d_name);
         }
     }
-
-    send_sync_msgs_of_friend__groupmsgs(tox);
 
     closedir(dfd);
 }
@@ -2149,6 +2166,12 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             dbg(0, "group id unknown?");
             return;
         } else {
+
+            if (ping_push_service() == 1)
+            {
+                ping_push_service();
+            }
+
             char public_key_hex[tox_public_key_hex_size];
             CLEAR(public_key_hex);
             bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
@@ -2606,6 +2629,21 @@ int main(int argc, char *argv[])
     tox_callback_group_join_fail(tox, group_join_fail_cb);
 
     updateToxSavedata(tox);
+
+    {
+        Group_message *p = orma_selectFromGroup_message(o->db);
+        Group_messageList *pl = p->toList(p);
+        dbg(LOGLEVEL_DEBUG, "pl->items=%lld\n", (long long)pl->items);
+        if (pl->items > 0)
+            {
+            if (ping_push_service() == 1)
+            {
+                ping_push_service();
+            }
+        }
+        orma_free_Group_messageList(pl);
+    }
+
 
 
     long long unsigned int cur_time = time(NULL);
