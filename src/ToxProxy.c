@@ -404,8 +404,11 @@ static void create_db()
     "  \"groupid\" TEXT,"
     "  \"peerpubkey\" TEXT,"
     "  \"datahex\" TEXT,"
+    "  \"wrappeddatahex\" TEXT,"
     "  \"message_id\" INTEGER,"
     "  \"timstamp_recv\" INTEGER,"
+    "  \"message_hashid\" TEXT,"
+    "  \"message_sync_hashid\" TEXT,"
     "  \"mtype\" INTEGER,"
     "  PRIMARY KEY(\"id\" AUTOINCREMENT)"
     ");"
@@ -1028,6 +1031,7 @@ void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, u
     CLEAR(msg_id_str);
     bin2upHex(msg_id, tox_public_key_size(), msg_id_str, tox_public_key_hex_size);
     dbg(2, "New message from %s msg_type=%d msg_id=%s", sender_key_hex, msg_type, msg_id_str);
+    free(msg_id);
 
     char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
     CLEAR(userDir);
@@ -1539,10 +1543,9 @@ bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t
                                         free(run_cmd);
                                         free(delete_file_glob);
 
-                                        free(comp_str);
-
                                         ret = true;
                                     }
+                                    free(comp_str);
                                 }
                             }
                         }
@@ -1867,6 +1870,73 @@ void send_sync_msgs_of_friend(Tox *tox, char *pubKeyHex)
     free(friendDir);
 }
 
+void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
+{
+    Group_message *p = orma_selectFromGroup_message(o->db);
+    Group_messageList *pl = p->toList(p);
+    dbg(LOGLEVEL_DEBUG, "pl->items=%lld\n", (long long)pl->items);
+    Group_message **pd = pl->l;
+    for(int i=0;i<pl->items;i++)
+    {
+        printf("GM: id=%ld\n", (*pd)->id);
+        printf("GM: message_id=\"%d\"\n", (uint32_t)(*pd)->message_id);
+        printf("GM: message_text_length_hex=\"%d\"\n", (*pd)->datahex->l);
+        printf("GM: peerpubkey len=\"%d\"\n", (*pd)->peerpubkey->l);
+        printf("GM: peerpubkey str=\"%s\"\n", (*pd)->peerpubkey->s);
+
+        uint32_t fsize = ((*pd)->wrappeddatahex->l) / 2;
+        uint8_t rawMsgData[fsize + 1];
+        memset(rawMsgData, 0, (fsize + 1));
+        H2B((*pd)->wrappeddatahex->s, rawMsgData);
+        // ----------------------
+        // ----------------------
+        uint32_t rawMsgSize2 = tox_messagev2_size(fsize, TOX_FILE_KIND_MESSAGEV2_SYNC, 0);
+        uint8_t *raw_message2 = calloc(1, rawMsgSize2);
+        uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
+
+        uint8_t pubKeyBin[tox_public_key_size() + 1];
+        memset(pubKeyBin, 0, tox_public_key_size() + 1);
+        H2B((*pd)->peerpubkey->s, pubKeyBin);
+
+        tox_messagev2_sync_wrap(fsize, pubKeyBin, TOX_FILE_KIND_MESSAGEV2_SEND,
+                                rawMsgData, 987, 775, raw_message2, msgid2);
+        dbg(9, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
+
+        // new msgid ----------
+        char msgid2_str[tox_public_key_hex_size + 1];
+        CLEAR(msgid2_str);
+        bin2upHex(msgid2, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
+        char msgid_orig_str[tox_public_key_hex_size + 1];
+        CLEAR(msgid_orig_str);
+        bin2upHex(rawMsgData, tox_public_key_size(), msgid_orig_str, tox_public_key_hex_size);
+        dbg(9, "send_sync_msg_single:msgid2=%s msgid_orig=%s", msgid2_str, msgid_orig_str);
+        // new msgid ----------
+
+        /*** ***/
+        /*** ***/
+        /*** ***/
+        TOX_ERR_FRIEND_SEND_MESSAGE error;
+        bool res2 = tox_util_friend_send_sync_message_v2(tox, 0, raw_message2, rawMsgSize2, &error);
+        dbg(9, "send_sync_msg_single: send_sync_msg res=%d; error=%d", (int)res2, error);
+        /*** ***/
+        /*** ***/
+        /*** ***/
+
+        Group_message *grm = orma_updateGroup_message(o->db);
+        int64_t affected_rows1 = grm
+            ->idEq(grm, (*pd)->id)
+            ->message_sync_hashidSet(grm, csb(msgid2_str))
+            ->execute(grm);
+        dbg(9, "send_sync_msg_single: updateGroup_message rows=%d", (int)affected_rows1);
+
+        free(raw_message2);
+        free(msgid2);
+
+        pd++;
+    }
+    orma_free_Group_messageList(pl);
+}
+
 /*
  * HINT: this function send friend messages and conference and group messages to master
  */
@@ -1889,6 +1959,8 @@ void send_sync_msgs(Tox *tox)
             send_sync_msgs_of_friend(tox, dp->d_name);
         }
     }
+
+    send_sync_msgs_of_friend__groupmsgs(tox);
 
     closedir(dfd);
 }
@@ -2098,31 +2170,78 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             memcpy(newmsg + HEX_MSG_NUM_LEN_COLON, message, length);
             newmsg[length + HEX_MSG_NUM_LEN_COLON] = 0;
 
+            // --------- old way ---------
+            // --------- old way ---------
+            // --------- old way ---------
+            // writeConferenceMessageHelper(tox, group_id_buffer, newmsg, (length + HEX_MSG_NUM_LEN_COLON), public_key_hex, 1);
+            // --------- old way ---------
+            // --------- old way ---------
+            // --------- old way ---------
+
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
             // ----- SQL -----
             Group_message *gm = orma_new_Group_message(o->db);
             // -------
+            size_t length_m_text = length + 64;
+            uint8_t *message_m = calloc(1, length_m_text);
+            // put peer pubkey hex in front of message
+            memcpy(message_m, public_key_hex, 64);
+            // put message bin after peer pubkey
+            memcpy(message_m + 64, message, length);
+
+            uint32_t raw_message_len = tox_messagev2_size(length_m_text, TOX_FILE_KIND_MESSAGEV2_SEND, 0);
+            dbg(0, "writeConferenceMessageGr:raw_message_len=%d length_m_text=%d", raw_message_len, (int)length_m_text);
+            uint8_t *raw_message_data = calloc(1, raw_message_len);
+            uint32_t ts_sec = (uint32_t)get_unix_time();
+            char msgid[TOX_PUBLIC_KEY_SIZE];
+            CLEAR(msgid);
+            bool res = tox_messagev2_wrap(length_m_text, TOX_FILE_KIND_MESSAGEV2_SEND,
+                                        0, message_m, ts_sec, 0,
+                                        raw_message_data, (uint8_t *)msgid);
+            if (res) {}
+
+            char msg_id_hex[tox_public_key_hex_size];
+            CLEAR(msg_id_hex);
+            bin2upHex((const uint8_t *)msgid, tox_public_key_size(), msg_id_hex, tox_public_key_hex_size);
+            dbg(0, "writeConferenceMessageGr:msg_id_hex=%s", msg_id_hex);
             // -------
             char group_id_uhex[2*TOX_GROUP_CHAT_ID_SIZE + 1];
             B2UH(group_id_buffer, TOX_GROUP_CHAT_ID_SIZE, group_id_uhex);
             gm->groupid = csb(group_id_uhex);
             // -------
+            dbg(0, "writeConferenceMessageGr:public_key_hex=%s", public_key_hex);
             gm->peerpubkey = csb(public_key_hex);
             // -------
             char group_msg_uhex[2*length + 1];
             B2UH(message, length, group_msg_uhex);
             gm->datahex = csb(group_msg_uhex);
             // -------
+            char group_wrappedmsg_uhex[2*raw_message_len + 1];
+            B2UH(raw_message_data, raw_message_len, group_wrappedmsg_uhex);
+            gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+            // -------
             gm->message_id = message_id;
             // -------
-            gm->timstamp_recv = (uint32_t)get_unix_time();
+            gm->timstamp_recv = ts_sec;
+            // -------
+            gm->message_hashid = csb(msg_id_hex);
             // -------
             // -------
             int64_t inserted_id = orma_insertIntoGroup_message(gm);
             orma_free_Group_message(gm);
             dbg(LOGLEVEL_INFO, "group_message inserted id: %lld\n", (long long)inserted_id);
+
+            free(message_m);
+            free(raw_message_data);
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
             // ----- SQL -----
 
-            writeConferenceMessageHelper(tox, group_id_buffer, newmsg, (length + HEX_MSG_NUM_LEN_COLON), public_key_hex, 1);
             free(newmsg);
         }
     }
