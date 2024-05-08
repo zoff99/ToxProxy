@@ -23,7 +23,7 @@ toxcore_amalgamation.a: toxcore_amalgamation.o
 	ar rcs toxcore_amalgamation.a toxcore_amalgamation.o
 
 toxcore_amalgamation.o: toxcore_amalgamation_no_toxav.c
-	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+	$(CC) -c -DTOX_CAPABILITIES_ACTIVE $(CFLAGS) $(LIBS) $< -o $@
 
 clean2:
 	rm -f ToxProxy sql_tables/gen/csorma.a sql_tables/gen/Makefile sql_tables/gen/*.* sql_tables/gen/sqlite/*
