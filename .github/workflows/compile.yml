@@ -11,6 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: install deps
+        run: |
+          sudo apt-get update && \
+          sudo DEBIAN_FRONTEND=noninteractive \
+          apt-get install -y --no-install-recommends \
+          ca-certificates \
+          libsodium-dev \
+          coreutils autoconf libtool pkg-config
+
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -38,7 +47,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: install deps
-        run:  brew install gdb
+        run:  brew install libsodium
 
       - uses: actions/setup-java@v4
         with:
@@ -65,6 +74,9 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v3
+
+      - name: install deps
+        run:  brew install libsodium
 
       - uses: actions/setup-java@v4
         with:
@@ -98,7 +110,8 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive \
           apt-get install -y --no-install-recommends \
           wine libwine-dev libwine wine64 wine64-tools winetricks \
-          gcc-mingw-w64-x86-64
+          gcc-mingw-w64-x86-64 \
+          libsodium-dev
 
       - name: check mingw
         run: dpkg -L gcc-mingw-w64-x86-64
