@@ -387,12 +387,17 @@ static void create_db()
     }
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Message\" ("
-    "      \"id\" INTEGER,    "
-    "      \"pubkey\" TEXT,    "
-    "      \"datahex\" TEXT,    "
-    "      \"mtype\" INTEGER,    "
-    "      PRIMARY KEY(\"id\" AUTOINCREMENT)    "
-    "    );    "
+    "  \"id\" INTEGER,"
+    "  \"pubkey\" TEXT,"
+    "  \"datahex\" TEXT,"
+    "  \"wrappeddatahex\" TEXT,"
+    "  \"message_id\" INTEGER,"
+    "  \"timstamp_recv\" INTEGER,"
+    "  \"message_hashid\" TEXT,"
+    "  \"message_sync_hashid\" TEXT,"
+    "  \"mtype\" INTEGER,"
+    "  PRIMARY KEY(\"id\" AUTOINCREMENT)"
+    ");"
     ;
     dbg(LOGLEVEL_INFO, "creating table: Message");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
@@ -1656,8 +1661,96 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
                 // send_text_message_to_friend(tox, friend_number, "Sorry, but this command has not been understood, please check the implementation or contact the developer.");
             }
         } else {
-            dbg(9, "call writeMessageHelper()");
+            // dbg(9, "call writeMessageHelper()");
             // nicht vom master, also wohl ein freund vom master.
+
+
+
+
+
+
+
+
+
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
+            Message *gm = orma_new_Message(o->db);
+            // -------
+
+            uint8_t public_key_bin[tox_public_key_size()];
+            CLEAR(public_key_bin);
+            tox_friend_get_public_key(tox, friend_number, public_key_bin, NULL);
+            char public_key_hex[tox_public_key_hex_size];
+            CLEAR(public_key_hex);
+            bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
+
+            uint8_t *msg_id = calloc(1, tox_public_key_size());
+            tox_messagev2_get_message_id(raw_message, msg_id);
+            char msg_id_str[tox_public_key_hex_size + 1];
+            CLEAR(msg_id_str);
+            bin2upHex(msg_id, tox_public_key_size(), msg_id_str, tox_public_key_hex_size);
+            dbg(2, "friend_message_v2_cb:New message from %s msg_type=%d msg_id=%s", public_key_hex, TOX_FILE_KIND_MESSAGEV2_SEND, msg_id_str);
+            free(msg_id);
+
+            // ----------------------
+            // ----------------------
+            uint32_t rawMsgSize2 = tox_messagev2_size(raw_message_len, TOX_FILE_KIND_MESSAGEV2_SYNC, 0);
+            uint8_t *raw_message2 = calloc(1, rawMsgSize2);
+            uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
+            tox_messagev2_sync_wrap(raw_message_len, public_key_bin, TOX_FILE_KIND_MESSAGEV2_SEND,
+                                    raw_message, 987, 775, raw_message2, msgid2);
+            dbg(9, "friend_message_v2_cb: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
+            char msgid2_str[tox_public_key_hex_size + 1];
+            CLEAR(msgid2_str);
+            bin2upHex(msgid2, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
+            dbg(9, "friend_message_v2_cb:msgid2=%s msgid_orig=%s", msgid2_str, msg_id_str);
+
+
+            // -------
+            dbg(0, "friend_message_v2_cb:public_key_hex=%s", public_key_hex);
+            gm->pubkey = csb(public_key_hex);
+            // -------
+            char group_msg_uhex[2*raw_message_len + 1];
+            B2UH(raw_message, raw_message_len, group_msg_uhex);
+            gm->datahex = csb(group_msg_uhex);
+            // -------
+            char group_wrappedmsg_uhex[2*rawMsgSize2 + 1];
+            B2UH(raw_message2, rawMsgSize2, group_wrappedmsg_uhex);
+            gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+            // -------
+            gm->timstamp_recv = (uint32_t)get_unix_time();
+            // -------
+            gm->message_hashid = csb(msg_id_str);
+            // -------
+            gm->message_sync_hashid = csb(msgid2_str);
+            // -------
+            // -------
+            int64_t inserted_id = orma_insertIntoMessage(gm);
+            orma_free_Message(gm);
+            dbg(LOGLEVEL_INFO, "Message inserted id: %lld\n", (long long)inserted_id);
+
+            free(msgid2);
+            free(raw_message2);
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
+            // ----- SQL -----
+
+
+
+
+
+
+
+
+
+
+
+
 
             // save the message to storage
             // ** DISABLE ** // writeMessageHelper(tox, friend_number, raw_message, raw_message_len, TOX_FILE_KIND_MESSAGEV2_SEND);
