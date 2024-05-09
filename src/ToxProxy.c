@@ -1579,7 +1579,6 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     dbg(9, "enter friend_read_receipt_message_v2_cb:msgid=%s", msgid2_str);
 
     // HINT: delete group messages for that incoming receipt, if any
-    /*
     Group_message *p = orma_deleteFromGroup_message(o->db);
     int64_t affected_rows2 = p->message_sync_hashidEq(p, csb(msgid2_str))->execute(p);
     printf("deleteFromGroup_message: affected rows: %d\n", (int)affected_rows2);
@@ -1587,7 +1586,6 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     {
         return;
     }
-    */
 
 	// check if the received msg is confirm conference msg received
 	// also: make long enough pauses in sending messages to master to allow for receipt msgs to come in and get processed.
