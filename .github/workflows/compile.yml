@@ -130,7 +130,7 @@ jobs:
           cd src/
           ls -al
           export CC=x86_64-w64-mingw32-gcc
-          make -j 6
+          make -j
 
       - name: check binary
         run: |
