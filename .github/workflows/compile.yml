@@ -17,8 +17,8 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive \
           apt-get install -y --no-install-recommends \
           ca-certificates \
-          libsodium-dev \
-          coreutils autoconf libtool pkg-config
+          coreutils autoconf libtool pkg-config \
+          libsodium-dev libcurl4-gnutls-dev
 
       - uses: actions/setup-java@v4
         with:
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: install deps
-        run:  brew install libsodium
+        run:  brew install libsodium curl
 
       - uses: actions/setup-java@v4
         with:
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: install deps
-        run:  brew install libsodium
+        run:  brew install libsodium curl
 
       - uses: actions/setup-java@v4
         with:
@@ -111,7 +111,7 @@ jobs:
           apt-get install -y --no-install-recommends \
           wine libwine-dev libwine wine64 wine64-tools winetricks \
           gcc-mingw-w64-x86-64 \
-          libsodium-dev
+          libsodium-dev libcurl4-gnutls-dev
 
       - name: check mingw
         run: dpkg -L gcc-mingw-w64-x86-64
