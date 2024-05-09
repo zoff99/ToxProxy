@@ -185,19 +185,11 @@ FILE *logfile = NULL;
 const char *log_filename = "toxblinkenwall.log";
 #endif
 
-#ifdef __MINGW32__
-const char *save_dir = "./";
-const char *masterFile = "toxproxymasterpubkey.txt";
-const char *tokenFile = "token.txt";
-const char *savedata_filename = "savedata.tox";
-const char *savedata_tmp_filename = "savedata.tox.tmp";
-#else
 const char *save_dir = "./db/";
 const char *masterFile = "./db/toxproxymasterpubkey.txt";
 const char *tokenFile = "./db/token.txt";
 const char *savedata_filename = "./db/savedata.tox";
 const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
-#endif
 
 const char *dbfilename = "toxproxy.db";
 
@@ -208,11 +200,7 @@ const char *silent_marker = "is.silent";
 
 #ifdef WRITE_MY_TOXID_TO_FILE
 const char *my_toxid_filename_txt = "toxid.txt";
-#ifdef __MINGW32__
-const char *my_toxid_filename_txt2 = "toxid2.txt";
-#else
 const char *my_toxid_filename_txt2 = "./db/toxid.txt";
-#endif
 #endif
 
 const char *shell_cmd__onstart = "./scripts/on_start.sh 2> /dev/null";
@@ -2146,7 +2134,7 @@ int main(int argc, char *argv[])
     dbg(2, "ToxProxy version: %s", global_version_string);
 
 #ifdef __MINGW32__
-    // mkdir(save_dir);
+    mkdir(save_dir);
 #else
     mkdir(save_dir, S_IRWXU);
 #endif
