@@ -28,8 +28,13 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 2
 #define VERSION_MINOR 0
-#define VERSION_PATCH 0
-static const char global_version_string[] = "2.0.0";
+#define VERSION_PATCH 1
+#if defined(__SANITIZE_ADDRESS__)
+    static const char global_version_string[] = "2.0.1-ASAN";
+#else
+    static const char global_version_string[] = "2.0.1";
+#endif
+
 // ----------- version -----------
 // ----------- version -----------
 
@@ -1684,7 +1689,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     // -------
     int64_t inserted_id = orma_insertIntoMessage(gm);
     orma_free_Message(gm);
-    dbg(LOGLEVEL_INFO, "Message ACK inserted id: %lld\n", (long long)inserted_id);
+    dbg(LOGLEVEL_INFO, "Message ACK inserted id: %lld", (long long)inserted_id);
 
     free(msgid3);
     free(raw_message2);
@@ -1812,7 +1817,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             // -------
             int64_t inserted_id = orma_insertIntoMessage(gm);
             orma_free_Message(gm);
-            dbg(LOGLEVEL_INFO, "Message inserted id: %lld\n", (long long)inserted_id);
+            dbg(LOGLEVEL_INFO, "Message inserted id: %lld", (long long)inserted_id);
 
             free(msgid2);
             free(raw_message2);
@@ -2060,7 +2065,7 @@ void send_sync_msgs_of_friend__messages(Tox *tox)
 {
     Message *p = orma_selectFromMessage(o->db);
     MessageList *pl = p->orderBytimstamp_recvAsc(p)->toList(p);
-    dbg(LOGLEVEL_DEBUG, "pl->items=%lld\n", (long long)pl->items);
+    dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
     Message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
     {
@@ -2098,7 +2103,7 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 {
     Group_message *p = orma_selectFromGroup_message(o->db);
     Group_messageList *pl = p->orderBytimstamp_recvAsc(p)->toList(p);
-    dbg(LOGLEVEL_DEBUG, "pl->items=%lld\n", (long long)pl->items);
+    dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
     Group_message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
     {
@@ -2445,7 +2450,7 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             // -------
             int64_t inserted_id = orma_insertIntoGroup_message(gm);
             orma_free_Group_message(gm);
-            dbg(LOGLEVEL_INFO, "group_message inserted id: %lld\n", (long long)inserted_id);
+            dbg(LOGLEVEL_INFO, "group_message inserted id: %lld", (long long)inserted_id);
 
             free(message_m);
             free(raw_message_data);
@@ -2824,7 +2829,7 @@ int main(int argc, char *argv[])
     {
         Group_message *p = orma_selectFromGroup_message(o->db);
         Group_messageList *pl = p->toList(p);
-        dbg(LOGLEVEL_DEBUG, "pl->items=%lld\n", (long long)pl->items);
+        dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
         if (pl->items > 0)
             {
             if (ping_push_service() == 1)
