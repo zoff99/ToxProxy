@@ -58,16 +58,16 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
+// #include <sys/socket.h>
+// #include <sys/ioctl.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <fcntl.h>
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
-#include <netdb.h>
-#include <netinet/in.h>
+// #include <netdb.h>
+// #include <netinet/in.h>
 
 #include <pthread.h>
 
@@ -185,22 +185,34 @@ FILE *logfile = NULL;
 const char *log_filename = "toxblinkenwall.log";
 #endif
 
+#ifdef __MINGW32__
+const char *save_dir = "./";
+const char *masterFile = "toxproxymasterpubkey.txt";
+const char *tokenFile = "token.txt";
+const char *savedata_filename = "savedata.tox";
+const char *savedata_tmp_filename = "savedata.tox.tmp";
+#else
 const char *save_dir = "./db/";
+const char *masterFile = "./db/toxproxymasterpubkey.txt";
+const char *tokenFile = "./db/token.txt";
+const char *savedata_filename = "./db/savedata.tox";
+const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
+#endif
 
 const char *dbfilename = "toxproxy.db";
 
-const char *savedata_filename = "./db/savedata.tox";
-const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
 
 const char *empty_log_message = "empty log message received!";
 const char *msgsDir = "./messages";
-const char *masterFile = "./db/toxproxymasterpubkey.txt";
-const char *tokenFile = "./db/token.txt";
 const char *silent_marker = "is.silent";
 
 #ifdef WRITE_MY_TOXID_TO_FILE
 const char *my_toxid_filename_txt = "toxid.txt";
+#ifdef __MINGW32__
+const char *my_toxid_filename_txt2 = "toxid2.txt";
+#else
 const char *my_toxid_filename_txt2 = "./db/toxid.txt";
+#endif
 #endif
 
 const char *shell_cmd__onstart = "./scripts/on_start.sh 2> /dev/null";
@@ -260,6 +272,14 @@ void openLogFile()
             0); // Line buffered, (default is fully buffered) so every logline is instantly visible (and doesn't vanish in a crash situation)
 }
 
+#ifdef __MINGW32__
+#define dbg2(ignore, ...) do { \
+    printf(__VA_ARGS__); \
+    printf("\n"); \
+} while(0)
+#define dbg(...) dbg2(__VA_ARGS__)
+
+#else
 void dbg(int level, const char *msg, ...)
 {
     struct timeval tv;
@@ -320,6 +340,7 @@ void dbg(int level, const char *msg, ...)
 
     free(buffer);
 }
+#endif
 
 void tox_log_cb__custom(Tox *UNUSED(tox), TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func,
                         const char *message, void *UNUSED(user_data))
@@ -713,6 +734,7 @@ Tox *openTox()
 
 void shuffle(int *array, size_t n)
 {
+#ifndef __MINGW32__
     struct timeval tv;
     gettimeofday(&tv, NULL);
     int usec = tv.tv_usec;
@@ -728,6 +750,7 @@ void shuffle(int *array, size_t n)
             array[i] = t;
         }
     }
+#endif
 }
 
 void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_tcp_relay)
@@ -953,201 +976,6 @@ bool check_if_group_notifiation_silent(const char* groupid)
 
     free(silentFilePath);
     return false;
-}
-
-void writeConferenceMessage(Tox *UNUSED(tox), const char *sender_group_key_hex, const uint8_t *message_orig, size_t length_orig,
-                            uint32_t UNUSED(msg_type), char *peer_pubkey_hex, int is_group)
-{
-    size_t length = length_orig + 64;
-    size_t len_copy = length_orig;
-
-    // TODO: this is probably wrong, and should use max size of messageV2 ?
-    if (length > TOX_MAX_MESSAGE_LENGTH) {
-        length = TOX_MAX_MESSAGE_LENGTH;
-        len_copy = TOX_MAX_MESSAGE_LENGTH - 64;
-    }
-
-    uint8_t *message = calloc(1, length);
-    // put peer pubkey in front of message
-    memcpy(message, peer_pubkey_hex, 64);
-    // put message after peer pubkey
-    memcpy(message + 64, message_orig, len_copy);
-
-    uint32_t raw_message_len = tox_messagev2_size(length, TOX_FILE_KIND_MESSAGEV2_SEND, 0);
-
-    dbg(0, "writeConferenceMessage:raw_message_len=%d length=%d", raw_message_len, (int)length);
-    uint8_t *raw_message_data = calloc(1, raw_message_len);
-
-    uint32_t ts_sec = (uint32_t) get_unix_time();
-
-    char msgid[TOX_PUBLIC_KEY_SIZE];
-    CLEAR(msgid);
-    bool res = tox_messagev2_wrap(length, TOX_FILE_KIND_MESSAGEV2_SEND,
-                                  0, message, ts_sec, 0,
-                                  raw_message_data, (uint8_t *)msgid);
-    if (res) {}
-
-    char msg_id_hex[tox_public_key_hex_size];
-    CLEAR(msg_id_hex);
-    bin2upHex((const uint8_t *)msgid, tox_public_key_size(), msg_id_hex, tox_public_key_hex_size);
-    dbg(0, "writeConferenceMessage:msg_id_hex=%s", msg_id_hex);
-
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
-    CLEAR(userDir);
-
-    strcpy(userDir, msgsDir);
-    strcat(userDir, "/");
-    strcat(userDir, sender_group_key_hex);
-
-    mkdir(msgsDir, S_IRWXU);
-    mkdir(userDir, S_IRWXU);
-
-    //TODO FIXME use message v2 message id / hash instead of timestamp of receiving / processing message!
-
-    char timestamp[100]; // = "0000-00-00_0000-00,000000";
-    CLEAR(timestamp);
-
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    struct tm tm = *localtime(&tv.tv_sec);
-    snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d_%02d%02d-%02d,%06ld",
-             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
-
-    char *msgPath = calloc(1, sizeof(userDir) + 1 + sizeof(timestamp) + 5 + 1 + 1);
-    strcpy(msgPath, userDir);
-    strcat(msgPath, "/");
-    strcat(msgPath, timestamp);
-    strcat(msgPath, ".txtS");
-
-    //if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
-    // {
-        FILE *f = fopen(msgPath, "wb");
-
-        if (f) {
-            fwrite(raw_message_data, raw_message_len, 1, f);
-            fclose(f);
-        }
-    //}
-
-    if (is_group != 1)
-    {
-        if (ping_push_service() == 1)
-        {
-            ping_push_service();
-        }
-    }
-    else
-    {
-        // HINT: check if master wants to get push notifications for this NGC group
-        bool is_silent = check_if_group_notifiation_silent(sender_group_key_hex);
-        if (!is_silent)
-        {
-            if (ping_push_service() == 1)
-            {
-                ping_push_service();
-            }
-        }
-    }
-
-    free(raw_message_data);
-    free(message);
-    free(msgPath);
-}
-
-void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, uint32_t msg_type)
-{
-
-    uint8_t *msg_id = calloc(1, tox_public_key_size());
-    tox_messagev2_get_message_id(message, msg_id);
-    char msg_id_str[tox_public_key_hex_size + 1];
-    CLEAR(msg_id_str);
-    bin2upHex(msg_id, tox_public_key_size(), msg_id_str, tox_public_key_hex_size);
-    dbg(2, "New message from %s msg_type=%d msg_id=%s", sender_key_hex, msg_type, msg_id_str);
-    free(msg_id);
-
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
-    CLEAR(userDir);
-
-    strcpy(userDir, msgsDir);
-    strcat(userDir, "/");
-    strcat(userDir, sender_key_hex);
-
-    mkdir(msgsDir, S_IRWXU);
-    mkdir(userDir, S_IRWXU);
-
-    //TODO FIXME use message v2 message id / hash instead of timestamp of receiving / processing message!
-
-    char timestamp[100]; // = "0000-00-00_0000-00,000000";
-    CLEAR(timestamp);
-
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    struct tm tm = *localtime(&tv.tv_sec);
-    snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d_%02d%02d-%02d,%06ld",
-             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
-
-    char *msgPath = calloc(1, sizeof(userDir) + 1 + sizeof(timestamp) + 5 + 1 + 1);
-    strcpy(msgPath, userDir);
-    strcat(msgPath, "/");
-    strcat(msgPath, timestamp);
-
-    if (msg_type == TOX_FILE_KIND_MESSAGEV2_ANSWER) {
-        strcat(msgPath, ".txtA");
-    } else if (msg_type == TOX_FILE_KIND_MESSAGEV2_SEND) {
-        strcat(msgPath, ".txtS");
-    }
-
-    //if (count_file_in_dir(userDir) < max_files)
-    //{
-        FILE *f = fopen(msgPath, "wb");
-
-        if (f) {
-            fwrite(message, length, 1, f);
-            fclose(f);
-        }
-    //}
-
-    if (ping_push_service() == 1)
-    {
-        ping_push_service();
-    }
-
-    free(msgPath);
-}
-
-void writeMessageHelper(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t length, uint32_t msg_type)
-{
-    uint8_t public_key_bin[tox_public_key_size()];
-    CLEAR(public_key_bin);
-
-    tox_friend_get_public_key(tox, friend_number, public_key_bin, NULL);
-
-    char public_key_hex[tox_public_key_hex_size];
-    CLEAR(public_key_hex);
-
-    bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
-    writeMessage(public_key_hex, message, length, msg_type);
-}
-
-void writeConferenceMessageHelper(Tox *tox, const uint8_t *conference_id, const uint8_t *message, size_t length,
-                                  char *peer_pubkey_hex, int is_group)
-{
-    if (is_group == 1)
-    {
-        char group_id_hex[tox_group_key_hex_size];
-        CLEAR(group_id_hex);
-
-        bin2upHex(conference_id, TOX_GROUP_CHAT_ID_SIZE, group_id_hex, (tox_group_key_hex_size));
-        writeConferenceMessage(tox, group_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex, is_group);
-    }
-    else
-    {
-        char conference_id_hex[TOX_CONFERENCE_ID_SIZE * 2 + 1];
-        CLEAR(conference_id_hex);
-
-        bin2upHex(conference_id, TOX_CONFERENCE_ID_SIZE, conference_id_hex, (TOX_CONFERENCE_ID_SIZE * 2 + 1));
-        writeConferenceMessage(tox, conference_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex, is_group);
-    }
 }
 
 void add_master(const char *public_key_hex)
@@ -1465,140 +1293,6 @@ void conference_peer_list_changed_cb(Tox *tox, uint32_t UNUSED(conference_number
 void friend_sync_message_v2_cb(Tox *UNUSED(tox), uint32_t UNUSED(friend_number), const uint8_t *UNUSED(message), size_t UNUSED(length))
 {
     dbg(9, "enter friend_sync_message_v2_cb");
-}
-
-/* TODO: CHECK */
-bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t UNUSED(length))
-{
-    bool ret = false;
-
-    uint8_t public_key_bin[tox_public_key_size()];
-    CLEAR(public_key_bin);
-
-    tox_friend_get_public_key(tox, friend_number, public_key_bin, NULL);
-
-    char public_key_hex[tox_public_key_hex_size];
-    CLEAR(public_key_hex);
-
-    bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
-
-    uint8_t *msg_id = calloc(1, tox_public_key_size());
-    if (msg_id)
-    {
-        tox_messagev2_get_message_id(message, msg_id);
-
-        char msgid2_str[tox_public_key_hex_size + 1];
-        CLEAR(msgid2_str);
-        bin2upHex(msg_id, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
-
-        dbg(2, "is_answer_to_synced_message: receipt from %s id __%s__", public_key_hex, msgid2_str);
-
-        // find that message and delete the file for it ----------------
-
-        mkdir(msgsDir, S_IRWXU);
-        DIR *dfd_m = opendir(msgsDir);
-        if (dfd_m == NULL)
-        {
-            free(msg_id);
-            return false;
-        }
-
-        struct dirent *dp_m = NULL;
-
-        while ((dp_m = readdir(dfd_m)) != NULL)
-        {
-            if (strlen(dp_m->d_name) > 2)
-            {
-                if (strncmp(dp_m->d_name, ".", 1) != 0 && strncmp(dp_m->d_name, "..", 2) != 0)
-                {
-                    // ****************************************
-                    // dbg(2, "is_answer_to_synced_message: looping file:001:%s", dp_m->d_name);
-
-                    char *friendDir = calloc(1, strlen(msgsDir) + 1 + strlen(dp_m->d_name) + 1);
-                    sprintf(friendDir, "%s/%s", msgsDir, dp_m->d_name);
-
-                    // dbg(2, "is_answer_to_synced_message: looping file:002:%s", friendDir);
-
-                    mkdir(msgsDir, S_IRWXU);
-                    DIR *dfd = opendir(friendDir);
-                    if (dfd == NULL)
-                    {
-                        free(friendDir);
-                        free(msg_id);
-                        return false;
-                    }
-
-                    struct dirent *dp = NULL;
-
-#define BASE_NAME_GLOB_LEN 31
-#define END_PART_GLOB_LEN 68
-
-                    while ((dp = readdir(dfd)) != NULL)
-                    {
-                        if (strlen(dp->d_name) > 2)
-                        {
-                            if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0)
-                            {
-                                // dbg(2, "is_answer_to_synced_message: looping file:003:%s", dp->d_name);
-
-                                int len = strlen(dp->d_name);
-                                const char *last_char = &dp->d_name[len - 1];
-                                if (strncmp(last_char, "_", 1) == 0)
-                                {
-                                    // dbg(2, "is_answer_to_synced_message: looping file:004:%s", last_char);
-
-                                    const char *last_char2 = &dp->d_name[len - END_PART_GLOB_LEN];
-                                    char *comp_str = calloc(1, (END_PART_GLOB_LEN + 2));
-                                    sprintf(comp_str, "__%s__", msgid2_str);
-
-                                    // dbg(2, "is_answer_to_synced_message: looping file:005:%s", last_char2);
-
-                                    // dbg(2, "is_answer_to_synced_message: looping file:006:%s END_PART_GLOB_LEN=%d", comp_str, (int)END_PART_GLOB_LEN);
-
-                                    if (strncmp(last_char2, comp_str, END_PART_GLOB_LEN) == 0)
-                                    {
-                                        // dbg(2, "is_answer_to_synced_message: found id %s in %s", comp_str, dp->d_name);
-                                        // now delete all files for that id
-                                        char *delete_file_glob = calloc(1, 1000);
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-                                        int ret_snprintf = snprintf(delete_file_glob, BASE_NAME_GLOB_LEN, "%s", dp->d_name);
-#pragma GCC diagnostic pop
-                                        if (ret_snprintf){}
-                                        char *run_cmd = calloc(1, 1000);
-                                        sprintf(run_cmd, "rm %s/%s*", friendDir, delete_file_glob);
-                                        // dbg(2, "is_answer_to_synced_message: running cmd: %s", run_cmd);
-                                        int cmd_res = system(run_cmd);
-                                        if (cmd_res){}
-                                        // dbg(2, "is_answer_to_synced_message: cmd DONE");
-                                        free(run_cmd);
-                                        free(delete_file_glob);
-
-                                        ret = true;
-                                    }
-                                    free(comp_str);
-                                }
-                            }
-                        }
-                    }
-
-                    // find that message and delete the file for it ----------------
-                    closedir(dfd);
-                    free(friendDir);
-
-                    // ****************************************
-                }
-            }
-        }
-
-        closedir(dfd_m);
-
-        free(msg_id);
-        return ret;
-    }
-
-    return false;
 }
 
 void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_t ts_sec, const uint8_t *msgid)
@@ -1919,146 +1613,6 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
     }
 }
 
-void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
-{
-    char *msgPath = calloc(1, strlen(msgsDir) + 1 + strlen(pubKeyHex) + 1 + strlen(msgFileName) + 1);
-
-    // last +1 is for terminating \0 I guess (without it, memory checker explodes..)
-    sprintf(msgPath, "%s/%s/%s", msgsDir, pubKeyHex, msgFileName);
-
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
-    CLEAR(userDir);
-    sprintf(userDir, "%s/%s", msgsDir, pubKeyHex);
-
-    FILE *f = fopen(msgPath, "rb");
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        long fsize = ftell(f);
-        fseek(f, 0, SEEK_SET);
-
-        if (fsize < 1) {
-            fclose(f);
-            free(msgPath);
-            return;
-        }
-
-        uint8_t *rawMsgData = calloc(1, fsize);
-        size_t ret = fread(rawMsgData, fsize, 1, f);
-
-        // TODO: handle ret return vlaue here!
-        if (ret) {
-            // ------
-        }
-
-        fclose(f);
-
-
-        uint32_t rawMsgSize2 = tox_messagev2_size(fsize, TOX_FILE_KIND_MESSAGEV2_SYNC, 0);
-        uint8_t *raw_message2 = calloc(1, rawMsgSize2);
-        uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
-        uint8_t *pubKeyBin = tox_address_hex_string_to_bin2(pubKeyHex);
-
-        if (msgFileName[strlen(msgFileName) - 1] == 'A') {
-            // TOX_FILE_KIND_MESSAGEV2_ANSWER
-            tox_messagev2_sync_wrap(fsize, pubKeyBin, TOX_FILE_KIND_MESSAGEV2_ANSWER,
-                                    rawMsgData, 665, 987, raw_message2, msgid2);
-            dbg(9, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_ANSWER", raw_message2);
-        } else { // TOX_FILE_KIND_MESSAGEV2_SEND
-            tox_messagev2_sync_wrap(fsize, pubKeyBin, TOX_FILE_KIND_MESSAGEV2_SEND,
-                                    rawMsgData, 987, 775, raw_message2, msgid2);
-            dbg(9, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
-        }
-
-        // save new msgid ----------
-        char msgid2_str[tox_public_key_hex_size + 1];
-        CLEAR(msgid2_str);
-        bin2upHex(msgid2, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
-
-        char msgid_orig_str[tox_public_key_hex_size + 1];
-        CLEAR(msgid_orig_str);
-        bin2upHex(rawMsgData, tox_public_key_size(), msgid_orig_str, tox_public_key_hex_size);
-
-        dbg(9, "send_sync_msg_single:msgid2=%s msgid_orig=%s", msgid2_str, msgid_orig_str);
-
-        char *msgPath_msg_id = calloc(1, 1000);
-        if (msgPath_msg_id)
-        {
-            sprintf(msgPath_msg_id, "%s__%s__", msgPath, msgid2_str);
-            dbg(9, "send_sync_msg_single: writing new msg_id to file: %s", msgPath_msg_id);
-
-            //if (count_file_in_dir(userDir) < max_files)
-            //{
-                FILE *f_msg_id = fopen(msgPath_msg_id, "wb");
-                fwrite(msgid_orig_str, tox_public_key_size(), 1, f_msg_id); // write the original msg_id into the file
-                fclose(f_msg_id);
-            //}
-
-            free(msgPath_msg_id);
-        }
-        // save new msgid ----------
-
-        TOX_ERR_FRIEND_SEND_MESSAGE error;
-        bool res2 = tox_util_friend_send_sync_message_v2(tox, 0, raw_message2, rawMsgSize2, &error);
-        dbg(9, "send_sync_msg_single: send_sync_msg res=%d; error=%d", (int)res2, error);
-
-        free(rawMsgData);
-        free(raw_message2);
-        free(pubKeyBin);
-        free(msgid2);
-
-        // do not delete messages here!! // unlink(msgPath);
-    }
-
-    free(msgPath);
-}
-
-void send_sync_msgs_of_friend(Tox *tox, char *pubKeyHex)
-{
-    // dbg(9, "enter send_sync_msgs_of_friend");
-    // dbg(3, "sending messages of friend: %s to master", pubKeyHex);
-
-    char *friendDir = calloc(1, strlen(msgsDir) + 1 + strlen(pubKeyHex) +
-                             1); // last +1 is for terminating \0 I guess (without it, memory checker explodes..)
-    sprintf(friendDir, "%s/%s", msgsDir, pubKeyHex);
-
-    mkdir(msgsDir, S_IRWXU);
-
-    DIR *dfd = opendir(friendDir);
-
-    if (dfd == NULL) {
-        // dbg(1, "Can't open msgsDir for sending messages to master (maybe no single message has been received yet?)");
-        free(friendDir);
-        return;
-    }
-
-    struct dirent *dp = NULL;
-
-    // char filename_qfd[260];
-    // char new_name_qfd[100];
-
-    while ((dp = readdir(dfd)) != NULL) {
-        if (strlen(dp->d_name) > 2)
-        {
-            if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0)
-            {
-                int len = strlen(dp->d_name);
-                const char *last_char = &dp->d_name[len - 1];
-                if (strncmp(last_char, "_", 1) != 0)
-                {
-                    if (strncmp(dp->d_name, "is.silent", strlen("is.silent")) != 0)
-                    {
-                        dbg(2, "found message by %s with filename %s", pubKeyHex, dp->d_name);
-                        send_sync_msg_single(tox, pubKeyHex, dp->d_name);
-                    }
-                }
-            }
-        }
-    }
-
-    closedir(dfd);
-    free(friendDir);
-}
-
 void send_sync_msgs_of_friend__messages(Tox *tox)
 {
     Message *p = orma_selectFromMessage(o->db);
@@ -2142,26 +1696,6 @@ void send_sync_msgs(Tox *tox)
 {
     send_sync_msgs_of_friend__groupmsgs(tox);
     send_sync_msgs_of_friend__messages(tox);
-
-    mkdir(msgsDir, S_IRWXU);
-
-    // loop over all directories = public-keys of friends we have received messages from
-    DIR *dfd = opendir(msgsDir);
-
-    if (dfd == NULL) {
-        // dbg(1, "Can't open msgsDir for sending messages to master (maybe no single message has been received yet?)");
-        return;
-    }
-
-    struct dirent *dp = NULL;
-
-    while ((dp = readdir(dfd)) != NULL) {
-        if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0) {
-            // ** DISBALE ** // send_sync_msgs_of_friend(tox, dp->d_name);
-        }
-    }
-
-    closedir(dfd);
 }
 
 struct string {
@@ -2611,7 +2145,11 @@ int main(int argc, char *argv[])
     fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
     dbg(2, "ToxProxy version: %s", global_version_string);
 
+#ifdef __MINGW32__
+    // mkdir(save_dir);
+#else
     mkdir(save_dir, S_IRWXU);
+#endif
     create_db();
 
     use_tor = 0;
