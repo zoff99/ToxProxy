@@ -1592,6 +1592,15 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
         return;
     }
 
+    // HINT: delete messages for that incoming receipt, if any
+    Message *m = orma_deleteFromMessage(o->db);
+    int64_t affected_rows3 = m->message_sync_hashidEq(m, csb(msgid2_str))->execute(m);
+    printf("orma_deleteFromMessage: affected rows: %d\n", (int)affected_rows3);
+    if (affected_rows3 > 0)
+    {
+        return;
+    }
+
 	// check if the received msg is confirm conference msg received
 	// also: make long enough pauses in sending messages to master to allow for receipt msgs to come in and get processed.
 
@@ -1979,7 +1988,7 @@ void send_sync_msgs_of_friend(Tox *tox, char *pubKeyHex)
 void send_sync_msgs_of_friend__messages(Tox *tox)
 {
     Message *p = orma_selectFromMessage(o->db);
-    MessageList *pl = p->toList(p);
+    MessageList *pl = p->orderBytimstamp_recvAsc(p)->toList(p);
     dbg(LOGLEVEL_DEBUG, "pl->items=%lld\n", (long long)pl->items);
     Message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
@@ -2017,7 +2026,7 @@ void send_sync_msgs_of_friend__messages(Tox *tox)
 void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 {
     Group_message *p = orma_selectFromGroup_message(o->db);
-    Group_messageList *pl = p->toList(p);
+    Group_messageList *pl = p->orderBytimstamp_recvAsc(p)->toList(p);
     dbg(LOGLEVEL_DEBUG, "pl->items=%lld\n", (long long)pl->items);
     Group_message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
