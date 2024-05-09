@@ -1595,7 +1595,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     // HINT: delete messages for that incoming receipt, if any
     Message *m = orma_deleteFromMessage(o->db);
     int64_t affected_rows3 = m->message_sync_hashidEq(m, csb(msgid2_str))->execute(m);
-    printf("orma_deleteFromMessage: affected rows: %d\n", (int)affected_rows3);
+    printf("deleteFromMessage: affected rows: %d\n", (int)affected_rows3);
     if (affected_rows3 > 0)
     {
         return;
