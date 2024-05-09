@@ -6,11 +6,14 @@
 #
 ###################################################
 
+MINGWLIBS=""
+
 ismingw = 0
 ccmachine = $(shell $(CC) -dumpmachine)
 ifeq ($(findstring mingw, $(ccmachine)), mingw)
   ismingw = 1
   CFLAGS += --static
+  MINGWLIBS=-liphlpapi
   CFLAGSSQLITE3 += --static
 endif
 
@@ -22,7 +25,7 @@ LIBSSQLITE3 = -lm
 CFLAGSSQLITE3 += -g -O3 -fPIC -I./ -Wall -Wextra -Werror=maybe-uninitialized -std=c99 -pedantic -pthread
 
 ToxProxy: ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a sqlite3.a
-	$(CC) $(CFLAGS) $(TP_CFLAGS) ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a sqlite3.a $(LIBS) -o ToxProxy
+	$(CC) $(CFLAGS) $(TP_CFLAGS) ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a sqlite3.a $(LIBS) $(MINGWLIBS) -o ToxProxy
 
 sqlite3.a: sqlite3.o
 	$(AR) rcs sqlite3.a sqlite3.o
