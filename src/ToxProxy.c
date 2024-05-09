@@ -71,9 +71,7 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 
 #include <pthread.h>
 
-#include <semaphore.h>
 #include <signal.h>
-#include <linux/sched.h>
 
 // timestamps for printf output
 #include <time.h>
