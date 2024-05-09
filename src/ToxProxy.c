@@ -1601,10 +1601,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
         return;
     }
 
-	// check if the received msg is confirm conference msg received
-	// also: make long enough pauses in sending messages to master to allow for receipt msgs to come in and get processed.
-
-#ifdef TOX_HAVE_TOXUTIL
+    // HINT: its an ACK, so save it into Message table
     uint32_t raw_message_len = tox_messagev2_size(0, TOX_FILE_KIND_MESSAGEV2_ANSWER, 0);
     uint8_t *raw_message_data = calloc(1, raw_message_len);
 
@@ -1613,20 +1610,71 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
                                   raw_message_data, (uint8_t *)msgid);
     if (res){}
 
-    // check if this is an answer for a message we synced -> then just delete this message and not send it again
-    // otherwise save the answer message
 
-    if (is_answer_to_synced_message(tox, friend_number, raw_message_data, raw_message_len))
-    {
-        dbg(9, "is_answer_to_synced_message:YES");
-    }
-    else
-    {
-        dbg(9, "friend_read_receipt_message_v2_cb:call writeMessageHelper");
-        // ** DISABLE ** // writeMessageHelper(tox, friend_number, raw_message_data, raw_message_len, TOX_FILE_KIND_MESSAGEV2_ANSWER);
-    }
+    // ----- SQL -----
+    // ----- SQL -----
+    // ----- SQL -----
+    // ----- SQL -----
+    // ----- SQL -----
+    Message *gm = orma_new_Message(o->db);
+    // -------
 
-#endif
+    uint8_t public_key_bin[tox_public_key_size()];
+    CLEAR(public_key_bin);
+    tox_friend_get_public_key(tox, friend_number, public_key_bin, NULL);
+    char public_key_hex[tox_public_key_hex_size];
+    CLEAR(public_key_hex);
+    bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
+
+    uint32_t rawMsgSize2 = tox_messagev2_size(raw_message_len, TOX_FILE_KIND_MESSAGEV2_SYNC, 0);
+    uint8_t *raw_message2 = calloc(1, rawMsgSize2);
+    uint8_t *msgid3 = calloc(1, TOX_PUBLIC_KEY_SIZE);
+    tox_messagev2_sync_wrap(raw_message_len, public_key_bin, TOX_FILE_KIND_MESSAGEV2_ANSWER,
+                            raw_message_data, 987, 775, raw_message2, msgid3);
+    dbg(9, "friend_read_receipt_message_v2_cb: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
+    char msgid3_str[tox_public_key_hex_size + 1];
+    CLEAR(msgid3_str);
+    bin2upHex(msgid3, tox_public_key_size(), msgid3_str, tox_public_key_hex_size);
+    dbg(9, "friend_read_receipt_message_v2_cb:msgid2=%s msgid_orig=%s", msgid3_str, msgid2_str);
+
+
+    // -------
+    dbg(0, "friend_read_receipt_message_v2_cb:public_key_hex=%s", public_key_hex);
+    gm->pubkey = csb(public_key_hex);
+    // -------
+    char group_msg_uhex[2*raw_message_len + 1];
+    B2UH(raw_message_data, raw_message_len, group_msg_uhex);
+    gm->datahex = csb(group_msg_uhex);
+    // -------
+    char group_wrappedmsg_uhex[2*rawMsgSize2 + 1];
+    B2UH(raw_message2, rawMsgSize2, group_wrappedmsg_uhex);
+    gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+    // -------
+    gm->timstamp_recv = (uint32_t)get_unix_time();
+    // -------
+    gm->mtype = TOX_FILE_KIND_MESSAGEV2_ANSWER;
+    // -------
+    gm->message_hashid = csb(msgid2_str);
+    // -------
+    gm->message_sync_hashid = csb(msgid3_str);
+    // -------
+    // -------
+    int64_t inserted_id = orma_insertIntoMessage(gm);
+    orma_free_Message(gm);
+    dbg(LOGLEVEL_INFO, "Message ACK inserted id: %lld\n", (long long)inserted_id);
+
+    free(msgid3);
+    free(raw_message2);
+    // ----- SQL -----
+    // ----- SQL -----
+    // ----- SQL -----
+    // ----- SQL -----
+    // ----- SQL -----
+
+
+
+
+
 
     free(raw_message_data);
 
