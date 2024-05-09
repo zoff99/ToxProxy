@@ -6,7 +6,7 @@
 #
 ###################################################
 
-MINGWLIBS=""
+MINGWLIBS=
 
 ismingw = 0
 ccmachine = $(shell $(CC) -dumpmachine)
