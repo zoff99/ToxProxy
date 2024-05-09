@@ -100,7 +100,7 @@ jobs:
           ls -hal ToxProxy
 
   test_wine:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
 
@@ -110,8 +110,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive \
           apt-get install -y --no-install-recommends \
           wine libwine-dev libwine wine64 wine64-tools winetricks \
-          libc6-dev \
-          gcc-mingw-w64-x86-64 mingw-w64-x86-64-dev \
+          gcc-mingw-w64-x86-64 \
           libsodium-dev libcurl4-gnutls-dev
 
       - name: check mingw
