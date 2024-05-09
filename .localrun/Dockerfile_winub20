@@ -1,0 +1,79 @@
+# syntax=docker/dockerfile:1
+FROM ubuntu:20.04
+RUN echo x
+RUN export DEBIAN_FRONTEND=noninteractive ; apt update && apt install -y make wget git coreutils autoconf \
+          libtool pkg-config nano vim gcc-mingw-w64-x86-64 \
+          gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 binutils-mingw-w64-x86-64 \
+          mingw-w64-tools pkg-config-mingw-w64-x86-64 win-iconv-mingw-w64-dev \
+          mingw-w64-x86-64-dev
+
+RUN mkdir -p /workspace2/build/
+RUN ls -al /workspace2/build/
+
+RUN LIBCURL_VERSION="7.80.0"; LIBCURL_FILENAME="curl-7.86.0.tar.gz" ;  wget "https://github.com/curl/curl/releases/download/curl-7_86_0/curl-7.86.0.tar.gz" -O libcurl.tgz
+RUN SODIUM_VERSION=1.0.19 ; wget "https://github.com/jedisct1/libsodium/releases/download/${SODIUM_VERSION}-RELEASE/libsodium-${SODIUM_VERSION}.tar.gz" -O libsodium.tgz
+
+RUN tar -xzvf libcurl.tgz
+RUN tar -xzvf libsodium.tgz
+
+RUN cd /workspace2/build/ && mkdir -p /workspace2/build/inst/
+
+RUN cd ./libsodium-stable/ && \
+    ARCH="x86_64" && \
+    export ARCH && \
+    ./configure  \
+              --prefix="/workspace2/build/inst/" \
+              --host=${ARCH}-w64-mingw32 && \
+    make -j$(nproc) && \
+    make install
+
+RUN OPENSSL_VERSION=1.1.1l ; wget "https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz" -O openssl.tgz
+RUN tar -xzvf openssl.tgz
+
+RUN cd ./openssl-1.1.1l/ && \
+    ARCH="x86_64" && \
+    export ARCH && \
+    ./Configure  \
+              --prefix="/workspace2/build/inst/" \
+              --cross-compile-prefix=${ARCH}-w64-mingw32- \
+              mingw64 && \
+    make -j$(nproc) && \
+    make install
+
+RUN cd ./curl-7.86.0/ && \
+    ARCH="x86_64" && \
+    export ARCH && \
+    ./configure  \
+              --prefix="/workspace2/build/inst/" \
+              --with-openssl="/workspace2/build/inst/" \
+              --host=${ARCH}-w64-mingw32 \
+              --disable-ftp \
+              --disable-file \
+              --disable-ldap \
+              --disable-ldaps \
+              --disable-rtsp \
+              --disable-telnet \
+              --disable-tftp \
+              --disable-pop3 \
+              --disable-imap \
+              --disable-smb \
+              --disable-smtp \
+              --disable-gopher \
+              --disable-mqtt \
+              --disable-manual \
+              --disable-websockets \
+              --with-ca-fallback \
+              --enable-static \
+              --disable-shared && \
+    make -j$(nproc) && \
+    make install
+
+RUN ls -al /workspace2/build/inst/
+RUN ls -al /workspace2/build/inst/lib/
+# RUN ls -al /workspace2/build/inst/bin/
+
+
+RUN export DEBIAN_FRONTEND=noninteractive ; apt update && apt install -y openjdk-17-jdk
+
+
+
