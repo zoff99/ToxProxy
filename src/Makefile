@@ -1,4 +1,18 @@
-CC = gcc
+###################################################
+#
+# (C) 2019 - 2024 Thomas Käfer, Zoff
+#
+# ToxProxy
+#
+###################################################
+
+ismingw = 0
+ccmachine = $(shell $(CC) -dumpmachine)
+ifeq ($(findstring mingw, $(ccmachine)), mingw)
+  ismingw = 1
+  CFLAGS += --static
+endif
+
 CFLAGS += -g -O3 -fPIC -I./
 LIBS = $(shell pkg-config --cflags --libs libsodium libcurl) -pthread
 TP_CFLAGS = -Wall -Wextra -std=c99 -pedantic

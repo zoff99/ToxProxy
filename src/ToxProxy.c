@@ -2704,7 +2704,9 @@ int main(int argc, char *argv[])
     }
     else
     {
+#ifndef __APPLE__
         pthread_setname_np(notification_thread, "t_notif");
+#endif
         dbg(2, "Notification Thread successfully created");
     }
 #endif
@@ -2899,8 +2901,9 @@ int main(int argc, char *argv[])
 
     tox_loop_running = 1;
     signal(SIGINT, sigint_handler);
+#ifndef __APPLE__
     pthread_setname_np(pthread_self(), "t_main");
-
+#endif
     size_t num_friends = tox_self_get_friend_list_size(tox);
     dbg(2, "num_friends=%d", (int)num_friends);
 
