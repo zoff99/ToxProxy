@@ -111,8 +111,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive \
           apt-get install -y --no-install-recommends \
           wine libwine-dev libwine wine64 wine64-tools winetricks \
-          gcc-mingw-w64-x86-64 \
-          libsodium-dev libcurl4-gnutls-dev
+          gcc-mingw-w64-x86-64
 
       - name: check mingw
         run: dpkg -L gcc-mingw-w64-x86-64
