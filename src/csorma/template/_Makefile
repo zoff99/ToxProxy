@@ -1,0 +1,95 @@
+###################################################
+#
+# (C) 2024 Zoff
+#
+# csorma - C Simple ORM (Android?)
+#
+###################################################
+
+ismingw = 0
+ccmachine = $(shell $(CC) -dumpmachine)
+ifeq ($(findstring mingw, $(ccmachine)), mingw)
+  ismingw = 1
+  CFLAGS += --static
+endif
+
+
+ASANCFLAGS = -fsanitize=address -fno-omit-frame-pointer -static-libasan
+CFLAGS += -g -O3 -fPIC -Wall -Wextra -std=c99 -pedantic -pthread -Isqlite/ -I./
+LIBSSQLITE3 = -lm
+
+# ------------------------------
+#  tests
+# ------------------------------
+all: csorma.a
+
+asan_all: asan_build all
+asan_tests: asan_build tests
+asan_csorma_stub: asan_build csorma_stub
+
+asan_build:
+	$(eval CFLAGS += $(ASANCFLAGS))
+
+tests: csorma_test csorma_example
+
+csorma_stub: csorma_stub.o sqlite3.a csorma.a
+	$(CC) $(CFLAGS) csorma_stub.o csorma.a sqlite3.a $(LIBS) -o csorma_stub
+
+csorma_test: csorma_test.o sqlite3.a csorma.a
+	$(CC) $(CFLAGS) csorma_test.o csorma.a sqlite3.a $(LIBS) -o csorma_test
+
+csorma_example: csorma_example.o sqlite3.a csorma.a
+	$(CC) $(CFLAGS) csorma_example.o csorma.a sqlite3.a $(LIBS) -o csorma_example
+
+csorma_stub.o: csorma_stub.c
+	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+
+csorma_test.o: csorma_test.c
+	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+
+csorma_example.o: csorma_example.c
+	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+
+# ------------------------------
+#  csorma lib
+# ------------------------------
+csorma.a: csorma.o logger.o __@@@TABLES_O_FILES@@@__
+	$(AR) rcs csorma.a csorma.o logger.o __@@@TABLES_O_FILES@@@__
+
+sharedlib: csorma.o logger.o __@@@TABLES_O_FILES@@@__
+	$(CC) -shared -o libcsorma.so csorma.o logger.o __@@@TABLES_O_FILES@@@__
+
+csorma.o: csorma.c csorma.h
+	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+
+logger.o: logger.c logger.h
+	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+
+# ------------------------------
+#  csorma tables
+# ------------------------------
+
+__@@@TABLES_COMPILE_O_FILES@@@__
+
+# ------------------------------
+#  SQLITE3
+# ------------------------------
+sqlite3.a: sqlite3.o
+	$(AR) rcs sqlite3.a sqlite3.o
+
+sqlite3.o: sqlite/sqlite3.c
+	$(CC) -c $(CFLAGS) $(LIBS) $(LIBSSQLITE3) $< -o $@
+
+# ------------------------------
+#  cleanup
+# ------------------------------
+clean:
+	rm -f csorma_test csorma_test.o csorma_example csorma_example.o logger.o
+	rm -f csorma.o libcsorma.so csorma.a
+	rm -f sqlite3.o sqlite3.a
+	rm -f __@@@TABLES_O_FILES@@@__
+
+clean2:
+	rm -f csorma_test.o csorma_example.o logger.o
+	rm -f csorma.o libcsorma.so csorma.a
+	rm -f __@@@TABLES_O_FILES@@@__
