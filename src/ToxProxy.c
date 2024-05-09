@@ -1723,6 +1723,8 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             // -------
             gm->timstamp_recv = (uint32_t)get_unix_time();
             // -------
+            gm->mtype = TOX_FILE_KIND_MESSAGEV2_SEND;
+            // -------
             gm->message_hashid = csb(msg_id_str);
             // -------
             gm->message_sync_hashid = csb(msgid2_str);
@@ -1974,6 +1976,44 @@ void send_sync_msgs_of_friend(Tox *tox, char *pubKeyHex)
     free(friendDir);
 }
 
+void send_sync_msgs_of_friend__messages(Tox *tox)
+{
+    Message *p = orma_selectFromMessage(o->db);
+    MessageList *pl = p->toList(p);
+    dbg(LOGLEVEL_DEBUG, "pl->items=%lld\n", (long long)pl->items);
+    Message **pd = pl->l;
+    for(int i=0;i<pl->items;i++)
+    {
+        if (i == 0)
+        {
+            if (masterIsOnline == false)
+            {
+                if (ping_push_service() == 1)
+                {
+                    ping_push_service();
+                }
+            }
+        }
+        printf("FM: id=%ld\n", (*pd)->id);
+        printf("FM: message_id=\"%d\"\n", (uint32_t)(*pd)->message_id);
+        printf("FM: message_text_length_hex=\"%d\"\n", (*pd)->datahex->l);
+        printf("FM: pubkey len=\"%d\"\n", (*pd)->pubkey->l);
+        printf("FM: pubkey str=\"%s\"\n", (*pd)->pubkey->s);
+
+        uint32_t rawMsgSize2 = ((*pd)->wrappeddatahex->l) / 2;
+        uint8_t raw_message2[rawMsgSize2 + 1];
+        memset(raw_message2, 0, (rawMsgSize2 + 1));
+        H2B((*pd)->wrappeddatahex->s, raw_message2);
+
+        TOX_ERR_FRIEND_SEND_MESSAGE error;
+        bool res2 = tox_util_friend_send_sync_message_v2(tox, 0, raw_message2, rawMsgSize2, &error);
+        dbg(9, "send_sync_msgs_of_friend__messages: send_sync_msg res=%d; error=%d", (int)res2, error);
+
+        pd++;
+    }
+    orma_free_MessageList(pl);
+}
+
 void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 {
     Group_message *p = orma_selectFromGroup_message(o->db);
@@ -2002,17 +2042,11 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
         uint8_t raw_message2[rawMsgSize2 + 1];
         memset(raw_message2, 0, (rawMsgSize2 + 1));
         H2B((*pd)->wrappeddatahex->s, raw_message2);
-        // ----------------------
-        // ----------------------
-        /*** ***/
-        /*** ***/
-        /*** ***/
+
         TOX_ERR_FRIEND_SEND_MESSAGE error;
         bool res2 = tox_util_friend_send_sync_message_v2(tox, 0, raw_message2, rawMsgSize2, &error);
-        dbg(9, "send_sync_msg_single: send_sync_msg res=%d; error=%d", (int)res2, error);
-        /*** ***/
-        /*** ***/
-        /*** ***/
+        dbg(9, "send_sync_msgs_of_friend__groupmsgs: send_sync_msg res=%d; error=%d", (int)res2, error);
+
         pd++;
     }
     orma_free_Group_messageList(pl);
@@ -2024,6 +2058,7 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 void send_sync_msgs(Tox *tox)
 {
     send_sync_msgs_of_friend__groupmsgs(tox);
+    send_sync_msgs_of_friend__messages(tox);
 
     mkdir(msgsDir, S_IRWXU);
 
