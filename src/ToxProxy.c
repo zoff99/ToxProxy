@@ -28,11 +28,11 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 2
 #define VERSION_MINOR 0
-#define VERSION_PATCH 1
+#define VERSION_PATCH 2
 #if defined(__SANITIZE_ADDRESS__)
-    static const char global_version_string[] = "2.0.1-ASAN";
+    static const char global_version_string[] = "2.0.2-ASAN";
 #else
-    static const char global_version_string[] = "2.0.1";
+    static const char global_version_string[] = "2.0.2";
 #endif
 
 // ----------- version -----------
@@ -135,6 +135,15 @@ extern "C" {
     } while (0)
 // WARNING: !! if you put garbage in you get garbabe out !!
 // -------- any_case_hex2bin (the in buffer "hex_str" must have a NULL terminator at the end, the out buffer will NOT be NULL terminated) --------
+
+
+// -------- create a csorma uppercase hex string from bytebuffer statically allocated --------
+#define ASSIGN_B2UH_CSB(assign_var, bytebuf, bytebuf_len) do { \
+    char x_uhex[2*bytebuf_len + 1]; \
+    B2UH(bytebuf, bytebuf_len, x_uhex); \
+    assign_var = csb(x_uhex); \
+} while(0)
+// -------- create a csorma uppercase hex string from bytebuffer statically allocated --------
 
 
 static char *NOTIFICATION__device_token = NULL;
@@ -1350,13 +1359,9 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     dbg(0, "friend_read_receipt_message_v2_cb:public_key_hex=%s", public_key_hex);
     gm->pubkey = csb(public_key_hex);
     // -------
-    char group_msg_uhex[2*raw_message_len + 1];
-    B2UH(raw_message_data, raw_message_len, group_msg_uhex);
-    gm->datahex = csb(group_msg_uhex);
+    ASSIGN_B2UH_CSB(gm->datahex, raw_message_data, raw_message_len);
     // -------
-    char group_wrappedmsg_uhex[2*rawMsgSize2 + 1];
-    B2UH(raw_message2, rawMsgSize2, group_wrappedmsg_uhex);
-    gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+    ASSIGN_B2UH_CSB(gm->wrappeddatahex, raw_message2, rawMsgSize2);
     // -------
     gm->timstamp_recv = (uint32_t)get_unix_time();
     // -------
@@ -1478,13 +1483,9 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             dbg(0, "friend_message_v2_cb:public_key_hex=%s", public_key_hex);
             gm->pubkey = csb(public_key_hex);
             // -------
-            char group_msg_uhex[2*raw_message_len + 1];
-            B2UH(raw_message, raw_message_len, group_msg_uhex);
-            gm->datahex = csb(group_msg_uhex);
+            ASSIGN_B2UH_CSB(gm->datahex, raw_message, raw_message_len);
             // -------
-            char group_wrappedmsg_uhex[2*rawMsgSize2 + 1];
-            B2UH(raw_message2, rawMsgSize2, group_wrappedmsg_uhex);
-            gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+            ASSIGN_B2UH_CSB(gm->wrappeddatahex, raw_message2, rawMsgSize2);
             // -------
             gm->timstamp_recv = (uint32_t)get_unix_time();
             // -------
@@ -1944,20 +1945,14 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
 
 
             // -------
-            char group_id_uhex[2*TOX_GROUP_CHAT_ID_SIZE + 1];
-            B2UH(group_id_buffer, TOX_GROUP_CHAT_ID_SIZE, group_id_uhex);
-            gm->groupid = csb(group_id_uhex);
+            ASSIGN_B2UH_CSB(gm->groupid, group_id_buffer, TOX_GROUP_CHAT_ID_SIZE);
             // -------
             dbg(0, "writeConferenceMessageGr:public_key_hex=%s", public_key_hex);
             gm->peerpubkey = csb(public_key_hex);
             // -------
-            char group_msg_uhex[2*length + 1];
-            B2UH(message, length, group_msg_uhex);
-            gm->datahex = csb(group_msg_uhex);
+            ASSIGN_B2UH_CSB(gm->datahex, message, length);
             // -------
-            char group_wrappedmsg_uhex[2*rawMsgSize2 + 1];
-            B2UH(raw_message2, rawMsgSize2, group_wrappedmsg_uhex);
-            gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+            ASSIGN_B2UH_CSB(gm->wrappeddatahex, raw_message2, rawMsgSize2);
             // -------
             gm->message_id = message_id;
             // -------
