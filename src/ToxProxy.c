@@ -148,6 +148,7 @@ extern "C" {
 
 static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
+static const char *LOV_KEY_PUSHTOKEN = "PUSHTOKEN";
 
 #define NOTI__device_token_min_len 5
 #define NOTI__device_token_max_len 300
@@ -984,56 +985,55 @@ void add_master(const char *public_key_hex)
 
 void add_token(const char *token_str)
 {
-    if (file_exists(tokenFile)) {
-        dbg(2, "Tokenfile already exists, deleting it");
-        unlink(tokenFile);
+    // sqltoken
+    Lov *l = orma_updateLov(o->db);
+    int64_t affected_rows3 = l->valueSet(l, csb(token_str))->keyEq(l, csb(LOV_KEY_PUSHTOKEN))->execute(l);
+    if (affected_rows3 < 1)
+    {
+        {
+        Lov *p = orma_new_Lov(o->db);
+        p->key = csb(LOV_KEY_PUSHTOKEN);
+        p->value = csb(token_str);
+        int64_t inserted_id = orma_insertIntoLov(p);
+        if (inserted_id < 0)
+        {
+            dbg(LOGLEVEL_ERROR, "inserting pushtoken failed");
+        }
+        else
+        {
+            dbg(LOGLEVEL_DEBUG, "inserted pushtoken: %lld %s", (long long)inserted_id, token_str);
+        }
+        orma_free_Lov(p);
+        }
     }
-
-    FILE *f = fopen(tokenFile, "wb");
-
-    if (f) {
-        fwrite(token_str, strlen(token_str), 1, f);
-        fprintf(stdout, "saved token:%s\n", NOTIFICATION__device_token);
-        dbg(2, "saved token:%s", NOTIFICATION__device_token);
-        fclose(f);
+    else
+    {
+        dbg(LOGLEVEL_DEBUG, "updated pushtoken: %lld %s", (long long)affected_rows3, token_str);
     }
 }
 
-void read_token_from_file()
+void read_token_from_db()
 {
-    if (!file_exists(tokenFile)) {
-        return;
-    }
-
-    FILE *f = fopen(tokenFile, "rb");
-
-    if (! f) {
-        return;
-    }
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (fsize < 1) {
-        fclose(f);
-        return;
-    }
-
-    if (NOTIFICATION__device_token)
+    // sqltoken
+    Lov *p = orma_selectFromLov(o->db);
+    LovList *pl = p->keyEq(p, csb(LOV_KEY_PUSHTOKEN))->toList(p);
+    Lov **pd = pl->l;
+    for(int i=0;i<pl->items;i++)
     {
-        free(NOTIFICATION__device_token);
-        NOTIFICATION__device_token = NULL;
+        if ((*pd)->value->l > 2)
+        {
+            if (NOTIFICATION__device_token)
+            {
+                free(NOTIFICATION__device_token);
+                NOTIFICATION__device_token = NULL;
+            }
+            // HINT: allocate 1 more byte for a NULL terminator in any case
+            NOTIFICATION__device_token = calloc(1, (*pd)->value->l + 1);
+            memcpy(NOTIFICATION__device_token, (*pd)->value->s, (*pd)->value->l);
+        }
+        // HINT: return after frist entry in any case
+        return;
     }
-
-    NOTIFICATION__device_token = calloc(1, fsize + 2);
-    size_t res = fread(NOTIFICATION__device_token, fsize, 1, f);
-    if (res) {}
-
-    fprintf(stdout, "loaded token:%s\n", NOTIFICATION__device_token);
-    dbg(2, "loaded token:%s", NOTIFICATION__device_token);
-
-    fclose(f);
 }
 
 bool is_master(const char *public_key_hex)
@@ -1558,13 +1558,16 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN) {
         if ((length > NOTI__device_token_min_len) && (length < NOTI__device_token_max_len))
         {
+            // sqltoken
             dbg(0, "received CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN message");
-            NOTIFICATION__device_token = calloc(1, (length + 1));
-            memcpy(NOTIFICATION__device_token, (data + 1), (length - 1));
-            dbg(0, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", NOTIFICATION__device_token);
-            fprintf(stdout, "received token:%s\n", NOTIFICATION__device_token);
+            char* tmp = calloc(1, (length + 1));
+            memcpy(tmp, (data + 1), (length - 1));
+            dbg(0, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", tmp);
+            fprintf(stdout, "received token:%s\n", tmp);
             // save notification token to file
-            add_token(NOTIFICATION__device_token);
+            add_token(tmp);
+            free(tmp);
+            read_token_from_db();
         }
         return;
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_FRIEND_PUBKEY_FOR_PROXY) {
@@ -2198,7 +2201,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    read_token_from_file();
+    read_token_from_db();
 
     on_start();
 
