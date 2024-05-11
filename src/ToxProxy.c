@@ -593,7 +593,7 @@ void killSwitch()
 void sigint_handler(int signo)
 {
     if (signo == SIGINT) {
-        printf("received SIGINT, pid=%d\n", getpid());
+        fprintf(stderr, "received SIGINT, pid=%d\n", getpid());
         tox_loop_running = 0;
     }
 }
@@ -1185,21 +1185,21 @@ void self_connection_status_cb(Tox *UNUSED(tox), TOX_CONNECTION connection_statu
     switch (connection_status) {
         case TOX_CONNECTION_NONE:
             dbg(2, "Connection Status changed to: Offline");
-            fprintf(stdout, "Connection Status changed to:Offline\n");
+            fprintf(stderr, "Connection Status changed to:Offline\n");
             my_connection_status = TOX_CONNECTION_NONE;
             on_offline();
             break;
 
         case TOX_CONNECTION_TCP:
             dbg(2, "Connection Status changed to: Online via TCP");
-            fprintf(stdout, "Connection Status changed to:Online via TCP\n");
+            fprintf(stderr, "Connection Status changed to:Online via TCP\n");
             my_connection_status = TOX_CONNECTION_TCP;
             on_online();
             break;
 
         case TOX_CONNECTION_UDP:
             dbg(2, "Connection Status changed to: Online via UDP");
-            fprintf(stdout, "Connection Status changed to:Online via UDP\n");
+            fprintf(stderr, "Connection Status changed to:Online via UDP\n");
             my_connection_status = TOX_CONNECTION_UDP;
             on_online();
             break;
@@ -1288,7 +1288,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     // HINT: delete group messages for that incoming receipt, if any
     Group_message *p = orma_deleteFromGroup_message(o->db);
     int64_t affected_rows2 = p->message_sync_hashidEq(p, csb(msgid2_str))->execute(p);
-    printf("deleteFromGroup_message: affected rows: %d\n", (int)affected_rows2);
+    dbg(LOGLEVEL_DEBUG, "deleteFromGroup_message: affected rows: %d\n", (int)affected_rows2);
     if (affected_rows2 > 0)
     {
         return;
@@ -1297,7 +1297,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     // HINT: delete messages for that incoming receipt, if any
     Message *m = orma_deleteFromMessage(o->db);
     int64_t affected_rows3 = m->message_sync_hashidEq(m, csb(msgid2_str))->execute(m);
-    printf("deleteFromMessage: affected rows: %d\n", (int)affected_rows3);
+    dbg(LOGLEVEL_DEBUG, "deleteFromMessage: affected rows: %d\n", (int)affected_rows3);
     if (affected_rows3 > 0)
     {
         return;
@@ -1556,11 +1556,11 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         if ((length > NOTI__device_token_min_len) && (length < NOTI__device_token_max_len))
         {
             // sqltoken
-            dbg(0, "received CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN message");
+            dbg(LOGLEVEL_DEBUG, "received CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN message");
             char* tmp = calloc(1, (length + 1));
             memcpy(tmp, (data + 1), (length - 1));
-            dbg(0, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", tmp);
-            fprintf(stdout, "received token:%s\n", tmp);
+            dbg(LOGLEVEL_DEBUG, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", tmp);
+            fprintf(stderr, "received token:%s\n", tmp);
             // save notification token to file
             add_token(tmp);
             free(tmp);
@@ -1605,12 +1605,6 @@ void send_sync_msgs_of_friend__messages(Tox *tox)
                 }
             }
         }
-        printf("FM: id=%ld\n", (*pd)->id);
-        printf("FM: message_id=\"%d\"\n", (uint32_t)(*pd)->message_id);
-        printf("FM: message_text_length_hex=\"%d\"\n", (*pd)->datahex->l);
-        printf("FM: pubkey len=\"%d\"\n", (*pd)->pubkey->l);
-        printf("FM: pubkey str=\"%s\"\n", (*pd)->pubkey->s);
-
         uint32_t rawMsgSize2 = ((*pd)->wrappeddatahex->l) / 2;
         uint8_t raw_message2[rawMsgSize2 + 1];
         memset(raw_message2, 0, (rawMsgSize2 + 1));
@@ -1643,12 +1637,6 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
                 }
             }
         }
-        printf("GM: id=%ld\n", (*pd)->id);
-        printf("GM: message_id=\"%d\"\n", (uint32_t)(*pd)->message_id);
-        printf("GM: message_text_length_hex=\"%d\"\n", (*pd)->datahex->l);
-        printf("GM: peerpubkey len=\"%d\"\n", (*pd)->peerpubkey->l);
-        printf("GM: peerpubkey str=\"%s\"\n", (*pd)->peerpubkey->s);
-
         uint32_t rawMsgSize2 = ((*pd)->wrappeddatahex->l) / 2;
         uint8_t raw_message2[rawMsgSize2 + 1];
         memset(raw_message2, 0, (rawMsgSize2 + 1));
