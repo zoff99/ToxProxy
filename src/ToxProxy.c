@@ -196,8 +196,6 @@ const char *log_filename = "toxblinkenwall.log";
 #endif
 
 const char *save_dir = "./db/";
-const char *masterFile = "./db/toxproxymasterpubkey.txt";
-const char *tokenFile = "./db/token.txt";
 const char *savedata_filename = "./db/savedata.tox";
 const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
 
@@ -455,6 +453,18 @@ static void create_db()
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
+
+    {
+    char *sql2 = ""
+    "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Message\" ON Message (timstamp_recv);"
+    "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Group_message\" ON Group_message (timstamp_recv);"
+    "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Message\" ON Message (message_hashid);"
+    "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Group_message\" ON Group_message (message_hashid);"
+    ;
+    dbg(LOGLEVEL_INFO, "creating indexs");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
 }
 
 static void add_group_to_db(const char *groupidhex, const uint32_t len)
@@ -586,8 +596,6 @@ void killSwitch()
 {
     dbg(2, "got killSwitch command, deleting all data");
     unlink(savedata_filename);
-    unlink(masterFile);
-    unlink(tokenFile);
     dbg(1, "todo implement deleting messages");
     tox_loop_running = 0;
     exit(0);
@@ -965,21 +973,12 @@ bool check_if_group_notifiation_silent(const char* groupid)
 
 void add_master(const char *public_key_hex)
 {
-
-    if (file_exists(masterFile)) {
-        dbg(2, "I already have a *MASTER*");
-        return;
-    }
-
-    dbg(2, "added master");
-
-    fprintf(stdout, "added master:%s\n", public_key_hex);
-
-    FILE *f = fopen(masterFile, "wb");
-
-    if (f) {
-        fwrite(public_key_hex, tox_public_key_hex_size, 1, f);
-        fclose(f);
+    // mastersql
+    Self *s = orma_updateSelf(o->db);
+    int64_t affected_rows3 = s->master_pubkeySet(s, csb(public_key_hex))->toxidEq(s, csb(LOV_KEY_PUSHTOKEN))->execute(s);
+    if (affected_rows3 < 1)
+    {
+        dbg(LOGLEVEL_ERROR, "Could not set master pubkey in Self Table");
     }
 }
 
@@ -1032,48 +1031,25 @@ void read_token_from_db()
             memcpy(NOTIFICATION__device_token, (*pd)->value->s, (*pd)->value->l);
         }
         // HINT: return after frist entry in any case
+        orma_free_LovList(pl);
         return;
     }
+    orma_free_LovList(pl);
 }
 
 bool is_master(const char *public_key_hex)
 {
-    //dbg(2, "enter:is_master");
-
-    if (!file_exists(masterFile)) {
-        dbg(2, "master file does not exist");
-        return false;
-    }
-
-    FILE *f = fopen(masterFile, "rb");
-
-    if (! f) {
-        return false;
-    }
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (fsize < 1) {
-        fclose(f);
-        return false;
-    }
-
-    char *masterPubKeyHexSaved = calloc(1, fsize + 2);
-    size_t res = fread(masterPubKeyHexSaved, fsize, 1, f);
-
-    if (res) {}
-
-    fclose(f);
-
-    if (strncmp(masterPubKeyHexSaved, public_key_hex, tox_public_key_hex_size) == 0) {
-        free(masterPubKeyHexSaved);
+    // mastersql
+    Self *s = orma_selectFromSelf(o->db);
+    int64_t count = s->master_pubkeyEq(s, csb(public_key_hex))->count(s);
+    if (count == 1)
+    {
+        dbg(LOGLEVEL_DEBUG, "is master %s: YES", public_key_hex);
         return true;
-    } else {
-        free(masterPubKeyHexSaved);
-        return false;
     }
+
+    dbg(LOGLEVEL_DEBUG, "is master %s: no", public_key_hex);
+    return false;
 }
 
 void getGroupIdHex_groupnumber(const Tox *tox, uint32_t group_number, char *hex)
@@ -1594,7 +1570,7 @@ void send_sync_msgs_of_friend__messages(Tox *tox)
 {
     Message *p = orma_selectFromMessage(o->db);
     MessageList *pl = p->orderBytimstamp_recvAsc(p)->toList(p);
-    dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
+    // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
     Message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
     {
@@ -1632,7 +1608,7 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 {
     Group_message *p = orma_selectFromGroup_message(o->db);
     Group_messageList *pl = p->orderBytimstamp_recvAsc(p)->toList(p);
-    dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
+    // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
     Group_message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
     {
@@ -2230,26 +2206,18 @@ int main(int argc, char *argv[])
     tox_address_hex_size = tox_address_size() * 2 + 1;
     tox_address_hex_size_without_null_termin = tox_address_size() * 2;
 
-    add_all_groups_to_db(tox);
-    add_all_friends_to_db(tox);
-
-    const char *name = "ToxProxy";
-    tox_self_set_name(tox, (uint8_t *) name, strlen(name), NULL);
-
-    const char *status_message = "Proxy for your messages";
-    tox_self_set_status_message(tox, (uint8_t *) status_message, strlen(status_message), NULL);
-
-    bootstrap(tox);
-
     uint8_t tox_id_bin[tox_address_size()];
     tox_self_get_address(tox, tox_id_bin);
 
     char toxid_hbuf[2*tox_address_size() + 1];
     B2UH(tox_id_bin, tox_address_size(), toxid_hbuf);
 
-    // char toxid_binbuf[tox_address_size() + 1];
-    // memset(toxid_binbuf, 0, tox_address_size() + 1);
-    // H2B(toxid_hbuf, toxid_binbuf);
+
+    // HINT: delete any entries with other toxid in the database -----------
+    Self *p2 = orma_deleteFromSelf(o->db);
+    int64_t deleted_rows = p2->toxidNotEq(p2, csc(toxid_hbuf, tox_address_hex_size_without_null_termin))->execute(p2);
+    dbg(LOGLEVEL_DEBUG, "deleted old toxid count: %lld", (long long)deleted_rows);
+    // HINT: delete any entries with other toxid in the database -----------
 
     {
     Self *p = orma_updateSelf(o->db);
@@ -2292,6 +2260,17 @@ int main(int argc, char *argv[])
         fclose(fp2);
     }
 #endif
+
+    add_all_groups_to_db(tox);
+    add_all_friends_to_db(tox);
+
+    const char *name = "ToxProxy";
+    tox_self_set_name(tox, (uint8_t *) name, strlen(name), NULL);
+
+    const char *status_message = "Proxy for your messages";
+    tox_self_set_status_message(tox, (uint8_t *) status_message, strlen(status_message), NULL);
+
+    bootstrap(tox);
 
     size_t friends = tox_self_get_friend_list_size(tox);
     dbg(9, "ToxProxy startup completed");
@@ -2341,7 +2320,7 @@ int main(int argc, char *argv[])
     {
         Group_message *p = orma_selectFromGroup_message(o->db);
         Group_messageList *pl = p->toList(p);
-        dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
+        // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
         if (pl->items > 0)
             {
             if (ping_push_service() == 1)
