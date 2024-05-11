@@ -1687,12 +1687,12 @@ void send_sync_msgs(Tox *tox)
     send_sync_msgs_of_friend__messages(tox);
 }
 
-struct string {
+struct curl_string {
     char *ptr;
     size_t len;
 };
 
-static void init_string(struct string *s)
+static void curl_init_string(struct curl_string *s)
 {
     s->len = 0;
     s->ptr = calloc(1, s->len + 1);
@@ -1706,7 +1706,7 @@ static void init_string(struct string *s)
     s->ptr[0] = '\0';
 }
 
-static size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s)
+static size_t curl_writefunc(void *ptr, size_t size, size_t nmemb, struct curl_string *s)
 {
     size_t new_len = s->len + size*nmemb;
     s->ptr = realloc(s->ptr, new_len+1);
@@ -1796,8 +1796,8 @@ static void *notification_thread_func(void *UNUSED(data))
 
                         if (curl)
                         {
-                            struct string s;
-                            init_string(&s);
+                            struct curl_string s;
+                            curl_init_string(&s);
 
                             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
                             curl_easy_setopt(curl, CURLOPT_URL, buf);
@@ -1805,7 +1805,7 @@ static void *notification_thread_func(void *UNUSED(data))
 
                             dbg(9, "request=%s", buf);
 
-                            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+                            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc);
                             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
 
                             res = curl_easy_perform(curl);
