@@ -972,7 +972,12 @@ void migrate_legay_masterfile()
     }
 
     char *legacy_master_pubkey = calloc(1, fsize + 2);
-    size_t res = fread(legacy_master_pubkey, fsize, 1, f);
+    long fsize_corr = fsize;
+    if (fsize > (TOX_PUBLIC_KEY_SIZE * 2))
+    {
+        fsize_corr = TOX_PUBLIC_KEY_SIZE * 2;
+    }
+    size_t res = fread(legacy_master_pubkey, fsize_corr, 1, f);
     if (res) {}
     fclose(f);
 
@@ -1039,8 +1044,25 @@ void read_token_from_db()
 bool is_master(const char *public_key_hex)
 {
     // mastersql
+
+    // --------- DEBUG ---------
+    // --------- DEBUG ---------
+    // --------- DEBUG ---------
     Self *s = orma_selectFromSelf(o->db);
-    int64_t count = s->master_pubkeyEq(s, csb(public_key_hex))->count(s);
+    SelfList *sl = s->toList(s);
+    Self **pd = sl->l;
+    for(int i=0;i<sl->items;i++)
+    {
+        dbg(LOGLEVEL_DEBUG, "masterpubkey: _%s_ compare pk: _%s_", (*pd)->master_pubkey->s, public_key_hex);
+    }
+    orma_free_SelfList(sl);
+    // --------- DEBUG ---------
+    // --------- DEBUG ---------
+    // --------- DEBUG ---------
+
+    Self *s2 = orma_selectFromSelf(o->db);
+    int64_t count = s2->master_pubkeyEq(s2, csb(public_key_hex))->count(s2);
+
     if (count == 1)
     {
         dbg(LOGLEVEL_DEBUG, "is master %s: YES", public_key_hex);
