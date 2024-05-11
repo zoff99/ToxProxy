@@ -2180,24 +2180,6 @@ int main(int argc, char *argv[])
 
     on_start();
 
-#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
-    curl_global_init(CURL_GLOBAL_ALL);
-    need_send_notification = 0;
-    notification_thread_stop = 0;
-
-    if (pthread_create(&notification_thread, NULL, notification_thread_func, (void *)NULL) != 0)
-    {
-        dbg(0, "Notification Thread create failed");
-    }
-    else
-    {
-#ifndef __APPLE__
-        pthread_setname_np(notification_thread, "t_notif");
-#endif
-        dbg(2, "Notification Thread successfully created");
-    }
-#endif
-
     Tox *tox = openTox();
 
     tox_public_key_hex_size = tox_public_key_size() * 2 + 1;
@@ -2257,6 +2239,26 @@ int main(int argc, char *argv[])
     if (fp2) {
         fprintf(fp2, "%s", toxid_hbuf);
         fclose(fp2);
+    }
+#endif
+
+    migrate_legay_masterfile();
+
+#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+    curl_global_init(CURL_GLOBAL_ALL);
+    need_send_notification = 0;
+    notification_thread_stop = 0;
+
+    if (pthread_create(&notification_thread, NULL, notification_thread_func, (void *)NULL) != 0)
+    {
+        dbg(0, "Notification Thread create failed");
+    }
+    else
+    {
+#ifndef __APPLE__
+        pthread_setname_np(notification_thread, "t_notif");
+#endif
+        dbg(2, "Notification Thread successfully created");
     }
 #endif
 
