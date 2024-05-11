@@ -28,11 +28,11 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 2
 #define VERSION_MINOR 0
-#define VERSION_PATCH 2
+#define VERSION_PATCH 3
 #if defined(__SANITIZE_ADDRESS__)
-    static const char global_version_string[] = "2.0.2-ASAN";
+    static const char global_version_string[] = "2.0.3-ASAN";
 #else
-    static const char global_version_string[] = "2.0.2";
+    static const char global_version_string[] = "2.0.3";
 #endif
 
 // ----------- version -----------
@@ -198,13 +198,13 @@ const char *log_filename = "toxblinkenwall.log";
 const char *save_dir = "./db/";
 const char *savedata_filename = "./db/savedata.tox";
 const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
+const char *legacy_masterpubkey_filename = "toxproxymasterpubkey.txt";
 
 const char *dbfilename = "toxproxy.db";
 
 
 const char *empty_log_message = "empty log message received!";
 const char *msgsDir = "./messages";
-const char *silent_marker = "is.silent";
 
 #ifdef WRITE_MY_TOXID_TO_FILE
 const char *my_toxid_filename_txt = "toxid.txt";
@@ -274,7 +274,6 @@ void openLogFile()
     printf("\n"); \
 } while(0)
 #define dbg(...) dbg2(__VA_ARGS__)
-
 #else
 void dbg(int level, const char *msg, ...)
 {
@@ -349,11 +348,6 @@ void tox_log_cb__custom(Tox *UNUSED(tox), TOX_LOG_LEVEL level, const char *file,
     if (level == TOX_LOG_LEVEL_ERROR) {log_level = LOGLEVEL_ERROR;}
     dbg(log_level, "ToxCore LogMsg: [%d] %s:%d - %s:%s", (int) level, file, (int) line, func, message);
 }
-
-// ---------- database functions ----------
-// ---------- database functions ----------
-// ---------- database functions ----------
-// ---------- database functions ----------
 
 static void shutdown_db()
 {
@@ -488,10 +482,6 @@ static void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bo
     orma_free_Friend(f);
 }
 
-// ---------- database functions ----------
-// ---------- database functions ----------
-// ---------- database functions ----------
-
 time_t get_unix_time(void)
 {
     return time(NULL);
@@ -503,12 +493,6 @@ void usleep_usec(uint64_t usec)
     ts.tv_sec = usec / 1000000;
     ts.tv_nsec = (usec % 1000000) * 1000;
     nanosleep(&ts, NULL);
-}
-
-bool file_exists(const char *path)
-{
-    struct stat s;
-    return stat(path, &s) == 0;
 }
 
 void bin2upHex(const uint8_t *bin, uint32_t bin_size, char *hex, uint32_t hex_size)
@@ -944,31 +928,6 @@ void bootstrap(Tox *tox)
     // tcp relay nodes
     bootstap_nodes(tox, nodes_tcp_relays, (int)(sizeof(nodes_tcp_relays) / sizeof(DHT_node)), 1);
 #pragma GCC diagnostic pop
-}
-
-bool check_if_group_notifiation_silent(const char* groupid)
-{
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
-    CLEAR(userDir);
-    strcpy(userDir, msgsDir);
-    strcat(userDir, "/");
-    strcat(userDir, groupid);
-
-    char *silentFilePath = calloc(1, sizeof(userDir) + 1 + strlen(silent_marker) + 5 + 1 + 1);
-    strcpy(silentFilePath, userDir);
-    strcat(silentFilePath, "/");
-    strcat(silentFilePath, silent_marker);
-
-    dbg(0, "checking for: %s", silentFilePath);
-    if (file_exists(silentFilePath))
-    {
-        dbg(0, "group: %s is silent", groupid);
-        free(silentFilePath);
-        return true;
-    }
-
-    free(silentFilePath);
-    return false;
 }
 
 void add_master(const char *public_key_hex)
