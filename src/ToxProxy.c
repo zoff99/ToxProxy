@@ -244,6 +244,11 @@ OrmaDatabase *o = NULL;
 int ping_push_service();
 // functions defs ------------
 
+bool file_exists(const char *path)
+{
+    struct stat s;
+    return stat(path, &s) == 0;
+}
 
 void openLogFile()
 {
@@ -939,6 +944,41 @@ void add_master(const char *public_key_hex)
     {
         dbg(LOGLEVEL_ERROR, "Could not set master pubkey in Self Table");
     }
+}
+
+void migrate_legay_masterfile()
+{
+    if (!file_exists(legacy_masterpubkey_filename))
+    {
+        return;
+    }
+
+    dbg(LOGLEVEL_INFO, "migrating old legacy master file ...");
+
+    FILE *f = fopen(legacy_masterpubkey_filename, "rb");
+    if (! f)
+    {
+        return;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (fsize < 1)
+    {
+        fclose(f);
+        return;
+    }
+
+    char *legacy_master_pubkey = calloc(1, fsize + 2);
+    size_t res = fread(legacy_master_pubkey, fsize, 1, f);
+    if (res) {}
+    fclose(f);
+
+    add_master(legacy_master_pubkey);
+    unlink(legacy_masterpubkey_filename);
+    dbg(LOGLEVEL_INFO, "migrating old legacy master file ... DONE");
 }
 
 void add_token(const char *token_str)
