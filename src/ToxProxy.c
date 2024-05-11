@@ -198,7 +198,7 @@ const char *log_filename = "toxblinkenwall.log";
 const char *save_dir = "./db/";
 const char *savedata_filename = "./db/savedata.tox";
 const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
-const char *legacy_masterpubkey_filename = "toxproxymasterpubkey.txt";
+const char *legacy_masterpubkey_filename = "./db/toxproxymasterpubkey.txt";
 
 const char *dbfilename = "toxproxy.db";
 
@@ -460,7 +460,7 @@ static void create_db()
     "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Message\" ON Message (message_hashid);"
     "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Group_message\" ON Group_message (message_hashid);"
     ;
-    dbg(LOGLEVEL_INFO, "creating indexs");
+    dbg(LOGLEVEL_INFO, "creating indexes");
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
