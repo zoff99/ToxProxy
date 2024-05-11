@@ -540,19 +540,6 @@ unsigned int char_to_int(char c)
     return -1;
 }
 
-/* this works only for hex strings the length of (TOX_ADDRESS_SIZE*2) */
-uint8_t *tox_address_hex_string_to_bin2(const char *hex_string)
-{
-    size_t len = TOX_ADDRESS_SIZE;
-    uint8_t *val = calloc(1, len);
-
-    for (size_t i = 0; i < len; ++i) {
-        val[i] = (16 * char_to_int(hex_string[2 * i])) + (char_to_int(hex_string[2 * i + 1]));
-    }
-
-    return val;
-}
-
 void on_start()
 {
     char *cmd_str = calloc(1, 1000);
@@ -1276,7 +1263,8 @@ void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_n
                 dbg(0, "conference id unknown?");
                 return;
             } else {
-                // ** DISABLE ** // writeConferenceMessageHelper(tox, conference_id_buffer, message, length, public_key_hex, 0);
+                // ** DISABLE ** //
+                // Conference messages no longer supported
             }
         }
     }
@@ -1431,13 +1419,18 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
                 // send_text_message_to_friend(tox, friend_number, "Sorry, but this command has not been understood, please check the implementation or contact the developer.");
             }
         } else {
-            // dbg(9, "call writeMessageHelper()");
             // nicht vom master, also wohl ein freund vom master.
 
 
 
 
-
+            if (masterIsOnline == false)
+            {
+                if (ping_push_service() == 1)
+                {
+                    ping_push_service();
+                }
+            }
 
 
 
@@ -1514,14 +1507,6 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
 
 
 
-
-
-
-
-
-
-            // save the message to storage
-            // ** DISABLE ** // writeMessageHelper(tox, friend_number, raw_message, raw_message_len, TOX_FILE_KIND_MESSAGEV2_SEND);
 
             // send back an ACK, that toxproxy has received the message
             if (raw_message_len >= TOX_PUBLIC_KEY_SIZE)
@@ -1679,7 +1664,7 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 }
 
 /*
- * HINT: this function send friend messages and conference and group messages to master
+ * HINT: this function sends friend messages and group messages to master
  */
 void send_sync_msgs(Tox *tox)
 {
@@ -1872,9 +1857,12 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             return;
         } else {
 
-            if (ping_push_service() == 1)
+            if (masterIsOnline == false)
             {
-                ping_push_service();
+                if (ping_push_service() == 1)
+                {
+                    ping_push_service();
+                }
             }
 
             char public_key_hex[tox_public_key_hex_size];
