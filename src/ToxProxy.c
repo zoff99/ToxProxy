@@ -939,7 +939,7 @@ void add_master(const char *public_key_hex)
 {
     // mastersql
     Self *s = orma_updateSelf(o->db);
-    int64_t affected_rows3 = s->master_pubkeySet(s, csb(public_key_hex))->toxidEq(s, csb(LOV_KEY_PUSHTOKEN))->execute(s);
+    int64_t affected_rows3 = s->master_pubkeySet(s, csb(public_key_hex))->execute(s);
     if (affected_rows3 < 1)
     {
         dbg(LOGLEVEL_ERROR, "Could not set master pubkey in Self Table");
