@@ -28,11 +28,11 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 2
 #define VERSION_MINOR 0
-#define VERSION_PATCH 1
+#define VERSION_PATCH 3
 #if defined(__SANITIZE_ADDRESS__)
-    static const char global_version_string[] = "2.0.1-ASAN";
+    static const char global_version_string[] = "2.0.3-ASAN";
 #else
-    static const char global_version_string[] = "2.0.1";
+    static const char global_version_string[] = "2.0.3";
 #endif
 
 // ----------- version -----------
@@ -58,16 +58,16 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
+// #include <sys/socket.h>
+// #include <sys/ioctl.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <fcntl.h>
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
-#include <netdb.h>
-#include <netinet/in.h>
+// #include <netdb.h>
+// #include <netinet/in.h>
 
 #include <pthread.h>
 
@@ -137,8 +137,18 @@ extern "C" {
 // -------- any_case_hex2bin (the in buffer "hex_str" must have a NULL terminator at the end, the out buffer will NOT be NULL terminated) --------
 
 
+// -------- create a csorma uppercase hex string from bytebuffer statically allocated --------
+#define ASSIGN_B2UH_CSB(assign_var, bytebuf, bytebuf_len) do { \
+    char x_uhex[2*bytebuf_len + 1]; \
+    B2UH(bytebuf, bytebuf_len, x_uhex); \
+    assign_var = csb(x_uhex); \
+} while(0)
+// -------- create a csorma uppercase hex string from bytebuffer statically allocated --------
+
+
 static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
+static const char *LOV_KEY_PUSHTOKEN = "PUSHTOKEN";
 
 #define NOTI__device_token_min_len 5
 #define NOTI__device_token_max_len 300
@@ -186,17 +196,15 @@ const char *log_filename = "toxblinkenwall.log";
 #endif
 
 const char *save_dir = "./db/";
+const char *savedata_filename = "./db/savedata.tox";
+const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
+const char *legacy_masterpubkey_filename = "./db/toxproxymasterpubkey.txt";
 
 const char *dbfilename = "toxproxy.db";
 
-const char *savedata_filename = "./db/savedata.tox";
-const char *savedata_tmp_filename = "./db/savedata.tox.tmp";
 
 const char *empty_log_message = "empty log message received!";
 const char *msgsDir = "./messages";
-const char *masterFile = "./db/toxproxymasterpubkey.txt";
-const char *tokenFile = "./db/token.txt";
-const char *silent_marker = "is.silent";
 
 #ifdef WRITE_MY_TOXID_TO_FILE
 const char *my_toxid_filename_txt = "toxid.txt";
@@ -236,6 +244,11 @@ OrmaDatabase *o = NULL;
 int ping_push_service();
 // functions defs ------------
 
+bool file_exists(const char *path)
+{
+    struct stat s;
+    return stat(path, &s) == 0;
+}
 
 void openLogFile()
 {
@@ -260,6 +273,13 @@ void openLogFile()
             0); // Line buffered, (default is fully buffered) so every logline is instantly visible (and doesn't vanish in a crash situation)
 }
 
+#ifdef __MINGW32__
+#define dbg2(ignore, ...) do { \
+    printf(__VA_ARGS__); \
+    printf("\n"); \
+} while(0)
+#define dbg(...) dbg2(__VA_ARGS__)
+#else
 void dbg(int level, const char *msg, ...)
 {
     struct timeval tv;
@@ -320,6 +340,7 @@ void dbg(int level, const char *msg, ...)
 
     free(buffer);
 }
+#endif
 
 void tox_log_cb__custom(Tox *UNUSED(tox), TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func,
                         const char *message, void *UNUSED(user_data))
@@ -332,11 +353,6 @@ void tox_log_cb__custom(Tox *UNUSED(tox), TOX_LOG_LEVEL level, const char *file,
     if (level == TOX_LOG_LEVEL_ERROR) {log_level = LOGLEVEL_ERROR;}
     dbg(log_level, "ToxCore LogMsg: [%d] %s:%d - %s:%s", (int) level, file, (int) line, func, message);
 }
-
-// ---------- database functions ----------
-// ---------- database functions ----------
-// ---------- database functions ----------
-// ---------- database functions ----------
 
 static void shutdown_db()
 {
@@ -436,6 +452,18 @@ static void create_db()
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
+
+    {
+    char *sql2 = ""
+    "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Message\" ON Message (timstamp_recv);"
+    "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Group_message\" ON Group_message (timstamp_recv);"
+    "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Message\" ON Message (message_hashid);"
+    "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Group_message\" ON Group_message (message_hashid);"
+    ;
+    dbg(LOGLEVEL_INFO, "creating indexes");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
 }
 
 static void add_group_to_db(const char *groupidhex, const uint32_t len)
@@ -459,10 +487,6 @@ static void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bo
     orma_free_Friend(f);
 }
 
-// ---------- database functions ----------
-// ---------- database functions ----------
-// ---------- database functions ----------
-
 time_t get_unix_time(void)
 {
     return time(NULL);
@@ -474,12 +498,6 @@ void usleep_usec(uint64_t usec)
     ts.tv_sec = usec / 1000000;
     ts.tv_nsec = (usec % 1000000) * 1000;
     nanosleep(&ts, NULL);
-}
-
-bool file_exists(const char *path)
-{
-    struct stat s;
-    return stat(path, &s) == 0;
 }
 
 void bin2upHex(const uint8_t *bin, uint32_t bin_size, char *hex, uint32_t hex_size)
@@ -520,19 +538,6 @@ unsigned int char_to_int(char c)
     }
 
     return -1;
-}
-
-/* this works only for hex strings the length of (TOX_ADDRESS_SIZE*2) */
-uint8_t *tox_address_hex_string_to_bin2(const char *hex_string)
-{
-    size_t len = TOX_ADDRESS_SIZE;
-    uint8_t *val = calloc(1, len);
-
-    for (size_t i = 0; i < len; ++i) {
-        val[i] = (16 * char_to_int(hex_string[2 * i])) + (char_to_int(hex_string[2 * i + 1]));
-    }
-
-    return val;
 }
 
 void on_start()
@@ -580,8 +585,6 @@ void killSwitch()
 {
     dbg(2, "got killSwitch command, deleting all data");
     unlink(savedata_filename);
-    unlink(masterFile);
-    unlink(tokenFile);
     dbg(1, "todo implement deleting messages");
     tox_loop_running = 0;
     exit(0);
@@ -713,6 +716,7 @@ Tox *openTox()
 
 void shuffle(int *array, size_t n)
 {
+#ifndef __MINGW32__
     struct timeval tv;
     gettimeofday(&tv, NULL);
     int usec = tv.tv_usec;
@@ -728,6 +732,7 @@ void shuffle(int *array, size_t n)
             array[i] = t;
         }
     }
+#endif
 }
 
 void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_tcp_relay)
@@ -930,338 +935,120 @@ void bootstrap(Tox *tox)
 #pragma GCC diagnostic pop
 }
 
-bool check_if_group_notifiation_silent(const char* groupid)
-{
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
-    CLEAR(userDir);
-    strcpy(userDir, msgsDir);
-    strcat(userDir, "/");
-    strcat(userDir, groupid);
-
-    char *silentFilePath = calloc(1, sizeof(userDir) + 1 + strlen(silent_marker) + 5 + 1 + 1);
-    strcpy(silentFilePath, userDir);
-    strcat(silentFilePath, "/");
-    strcat(silentFilePath, silent_marker);
-
-    dbg(0, "checking for: %s", silentFilePath);
-    if (file_exists(silentFilePath))
-    {
-        dbg(0, "group: %s is silent", groupid);
-        free(silentFilePath);
-        return true;
-    }
-
-    free(silentFilePath);
-    return false;
-}
-
-void writeConferenceMessage(Tox *UNUSED(tox), const char *sender_group_key_hex, const uint8_t *message_orig, size_t length_orig,
-                            uint32_t UNUSED(msg_type), char *peer_pubkey_hex, int is_group)
-{
-    size_t length = length_orig + 64;
-    size_t len_copy = length_orig;
-
-    // TODO: this is probably wrong, and should use max size of messageV2 ?
-    if (length > TOX_MAX_MESSAGE_LENGTH) {
-        length = TOX_MAX_MESSAGE_LENGTH;
-        len_copy = TOX_MAX_MESSAGE_LENGTH - 64;
-    }
-
-    uint8_t *message = calloc(1, length);
-    // put peer pubkey in front of message
-    memcpy(message, peer_pubkey_hex, 64);
-    // put message after peer pubkey
-    memcpy(message + 64, message_orig, len_copy);
-
-    uint32_t raw_message_len = tox_messagev2_size(length, TOX_FILE_KIND_MESSAGEV2_SEND, 0);
-
-    dbg(0, "writeConferenceMessage:raw_message_len=%d length=%d", raw_message_len, (int)length);
-    uint8_t *raw_message_data = calloc(1, raw_message_len);
-
-    uint32_t ts_sec = (uint32_t) get_unix_time();
-
-    char msgid[TOX_PUBLIC_KEY_SIZE];
-    CLEAR(msgid);
-    bool res = tox_messagev2_wrap(length, TOX_FILE_KIND_MESSAGEV2_SEND,
-                                  0, message, ts_sec, 0,
-                                  raw_message_data, (uint8_t *)msgid);
-    if (res) {}
-
-    char msg_id_hex[tox_public_key_hex_size];
-    CLEAR(msg_id_hex);
-    bin2upHex((const uint8_t *)msgid, tox_public_key_size(), msg_id_hex, tox_public_key_hex_size);
-    dbg(0, "writeConferenceMessage:msg_id_hex=%s", msg_id_hex);
-
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
-    CLEAR(userDir);
-
-    strcpy(userDir, msgsDir);
-    strcat(userDir, "/");
-    strcat(userDir, sender_group_key_hex);
-
-    mkdir(msgsDir, S_IRWXU);
-    mkdir(userDir, S_IRWXU);
-
-    //TODO FIXME use message v2 message id / hash instead of timestamp of receiving / processing message!
-
-    char timestamp[100]; // = "0000-00-00_0000-00,000000";
-    CLEAR(timestamp);
-
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    struct tm tm = *localtime(&tv.tv_sec);
-    snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d_%02d%02d-%02d,%06ld",
-             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
-
-    char *msgPath = calloc(1, sizeof(userDir) + 1 + sizeof(timestamp) + 5 + 1 + 1);
-    strcpy(msgPath, userDir);
-    strcat(msgPath, "/");
-    strcat(msgPath, timestamp);
-    strcat(msgPath, ".txtS");
-
-    //if (count_file_in_dir(userDir) < MAX_FILES_IN_ONE_MESSAGE_DIR)
-    // {
-        FILE *f = fopen(msgPath, "wb");
-
-        if (f) {
-            fwrite(raw_message_data, raw_message_len, 1, f);
-            fclose(f);
-        }
-    //}
-
-    if (is_group != 1)
-    {
-        if (ping_push_service() == 1)
-        {
-            ping_push_service();
-        }
-    }
-    else
-    {
-        // HINT: check if master wants to get push notifications for this NGC group
-        bool is_silent = check_if_group_notifiation_silent(sender_group_key_hex);
-        if (!is_silent)
-        {
-            if (ping_push_service() == 1)
-            {
-                ping_push_service();
-            }
-        }
-    }
-
-    free(raw_message_data);
-    free(message);
-    free(msgPath);
-}
-
-void writeMessage(char *sender_key_hex, const uint8_t *message, size_t length, uint32_t msg_type)
-{
-
-    uint8_t *msg_id = calloc(1, tox_public_key_size());
-    tox_messagev2_get_message_id(message, msg_id);
-    char msg_id_str[tox_public_key_hex_size + 1];
-    CLEAR(msg_id_str);
-    bin2upHex(msg_id, tox_public_key_size(), msg_id_str, tox_public_key_hex_size);
-    dbg(2, "New message from %s msg_type=%d msg_id=%s", sender_key_hex, msg_type, msg_id_str);
-    free(msg_id);
-
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
-    CLEAR(userDir);
-
-    strcpy(userDir, msgsDir);
-    strcat(userDir, "/");
-    strcat(userDir, sender_key_hex);
-
-    mkdir(msgsDir, S_IRWXU);
-    mkdir(userDir, S_IRWXU);
-
-    //TODO FIXME use message v2 message id / hash instead of timestamp of receiving / processing message!
-
-    char timestamp[100]; // = "0000-00-00_0000-00,000000";
-    CLEAR(timestamp);
-
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    struct tm tm = *localtime(&tv.tv_sec);
-    snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d_%02d%02d-%02d,%06ld",
-             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
-
-    char *msgPath = calloc(1, sizeof(userDir) + 1 + sizeof(timestamp) + 5 + 1 + 1);
-    strcpy(msgPath, userDir);
-    strcat(msgPath, "/");
-    strcat(msgPath, timestamp);
-
-    if (msg_type == TOX_FILE_KIND_MESSAGEV2_ANSWER) {
-        strcat(msgPath, ".txtA");
-    } else if (msg_type == TOX_FILE_KIND_MESSAGEV2_SEND) {
-        strcat(msgPath, ".txtS");
-    }
-
-    //if (count_file_in_dir(userDir) < max_files)
-    //{
-        FILE *f = fopen(msgPath, "wb");
-
-        if (f) {
-            fwrite(message, length, 1, f);
-            fclose(f);
-        }
-    //}
-
-    if (ping_push_service() == 1)
-    {
-        ping_push_service();
-    }
-
-    free(msgPath);
-}
-
-void writeMessageHelper(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t length, uint32_t msg_type)
-{
-    uint8_t public_key_bin[tox_public_key_size()];
-    CLEAR(public_key_bin);
-
-    tox_friend_get_public_key(tox, friend_number, public_key_bin, NULL);
-
-    char public_key_hex[tox_public_key_hex_size];
-    CLEAR(public_key_hex);
-
-    bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
-    writeMessage(public_key_hex, message, length, msg_type);
-}
-
-void writeConferenceMessageHelper(Tox *tox, const uint8_t *conference_id, const uint8_t *message, size_t length,
-                                  char *peer_pubkey_hex, int is_group)
-{
-    if (is_group == 1)
-    {
-        char group_id_hex[tox_group_key_hex_size];
-        CLEAR(group_id_hex);
-
-        bin2upHex(conference_id, TOX_GROUP_CHAT_ID_SIZE, group_id_hex, (tox_group_key_hex_size));
-        writeConferenceMessage(tox, group_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex, is_group);
-    }
-    else
-    {
-        char conference_id_hex[TOX_CONFERENCE_ID_SIZE * 2 + 1];
-        CLEAR(conference_id_hex);
-
-        bin2upHex(conference_id, TOX_CONFERENCE_ID_SIZE, conference_id_hex, (TOX_CONFERENCE_ID_SIZE * 2 + 1));
-        writeConferenceMessage(tox, conference_id_hex, message, length, TOX_FILE_KIND_MESSAGEV2_SEND, peer_pubkey_hex, is_group);
-    }
-}
-
 void add_master(const char *public_key_hex)
 {
+    // mastersql
+    Self *s = orma_updateSelf(o->db);
+    int64_t affected_rows3 = s->master_pubkeySet(s, csb(public_key_hex))->execute(s);
+    if (affected_rows3 < 1)
+    {
+        dbg(LOGLEVEL_ERROR, "Could not set master pubkey in Self Table");
+    }
+}
 
-    if (file_exists(masterFile)) {
-        dbg(2, "I already have a *MASTER*");
+void migrate_legay_masterfile()
+{
+    if (!file_exists(legacy_masterpubkey_filename))
+    {
         return;
     }
 
-    dbg(2, "added master");
+    dbg(LOGLEVEL_INFO, "migrating old legacy master file ...");
 
-    fprintf(stdout, "added master:%s\n", public_key_hex);
-
-    FILE *f = fopen(masterFile, "wb");
-
-    if (f) {
-        fwrite(public_key_hex, tox_public_key_hex_size, 1, f);
-        fclose(f);
+    FILE *f = fopen(legacy_masterpubkey_filename, "rb");
+    if (! f)
+    {
+        return;
     }
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (fsize < 1)
+    {
+        fclose(f);
+        return;
+    }
+
+    char *legacy_master_pubkey = calloc(1, fsize + 2);
+    size_t res = fread(legacy_master_pubkey, fsize, 1, f);
+    if (res) {}
+    fclose(f);
+
+    add_master(legacy_master_pubkey);
+    unlink(legacy_masterpubkey_filename);
+    dbg(LOGLEVEL_INFO, "migrating old legacy master file ... DONE");
 }
 
 void add_token(const char *token_str)
 {
-    if (file_exists(tokenFile)) {
-        dbg(2, "Tokenfile already exists, deleting it");
-        unlink(tokenFile);
+    // sqltoken
+    Lov *l = orma_updateLov(o->db);
+    int64_t affected_rows3 = l->valueSet(l, csb(token_str))->keyEq(l, csb(LOV_KEY_PUSHTOKEN))->execute(l);
+    if (affected_rows3 < 1)
+    {
+        {
+        Lov *p = orma_new_Lov(o->db);
+        p->key = csb(LOV_KEY_PUSHTOKEN);
+        p->value = csb(token_str);
+        int64_t inserted_id = orma_insertIntoLov(p);
+        if (inserted_id < 0)
+        {
+            dbg(LOGLEVEL_ERROR, "inserting pushtoken failed");
+        }
+        else
+        {
+            dbg(LOGLEVEL_DEBUG, "inserted pushtoken: %lld %s", (long long)inserted_id, token_str);
+        }
+        orma_free_Lov(p);
+        }
     }
-
-    FILE *f = fopen(tokenFile, "wb");
-
-    if (f) {
-        fwrite(token_str, strlen(token_str), 1, f);
-        fprintf(stdout, "saved token:%s\n", NOTIFICATION__device_token);
-        dbg(2, "saved token:%s", NOTIFICATION__device_token);
-        fclose(f);
+    else
+    {
+        dbg(LOGLEVEL_DEBUG, "updated pushtoken: %lld %s", (long long)affected_rows3, token_str);
     }
 }
 
-void read_token_from_file()
+void read_token_from_db()
 {
-    if (!file_exists(tokenFile)) {
-        return;
-    }
-
-    FILE *f = fopen(tokenFile, "rb");
-
-    if (! f) {
-        return;
-    }
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (fsize < 1) {
-        fclose(f);
-        return;
-    }
-
-    if (NOTIFICATION__device_token)
+    // sqltoken
+    Lov *p = orma_selectFromLov(o->db);
+    LovList *pl = p->keyEq(p, csb(LOV_KEY_PUSHTOKEN))->toList(p);
+    Lov **pd = pl->l;
+    for(int i=0;i<pl->items;i++)
     {
-        free(NOTIFICATION__device_token);
-        NOTIFICATION__device_token = NULL;
+        if ((*pd)->value->l > 2)
+        {
+            if (NOTIFICATION__device_token)
+            {
+                free(NOTIFICATION__device_token);
+                NOTIFICATION__device_token = NULL;
+            }
+            // HINT: allocate 1 more byte for a NULL terminator in any case
+            NOTIFICATION__device_token = calloc(1, (*pd)->value->l + 1);
+            memcpy(NOTIFICATION__device_token, (*pd)->value->s, (*pd)->value->l);
+        }
+        // HINT: return after frist entry in any case
+        orma_free_LovList(pl);
+        return;
     }
-
-    NOTIFICATION__device_token = calloc(1, fsize + 2);
-    size_t res = fread(NOTIFICATION__device_token, fsize, 1, f);
-    if (res) {}
-
-    fprintf(stdout, "loaded token:%s\n", NOTIFICATION__device_token);
-    dbg(2, "loaded token:%s", NOTIFICATION__device_token);
-
-    fclose(f);
+    orma_free_LovList(pl);
 }
 
 bool is_master(const char *public_key_hex)
 {
-    //dbg(2, "enter:is_master");
-
-    if (!file_exists(masterFile)) {
-        dbg(2, "master file does not exist");
-        return false;
-    }
-
-    FILE *f = fopen(masterFile, "rb");
-
-    if (! f) {
-        return false;
-    }
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (fsize < 1) {
-        fclose(f);
-        return false;
-    }
-
-    char *masterPubKeyHexSaved = calloc(1, fsize + 2);
-    size_t res = fread(masterPubKeyHexSaved, fsize, 1, f);
-
-    if (res) {}
-
-    fclose(f);
-
-    if (strncmp(masterPubKeyHexSaved, public_key_hex, tox_public_key_hex_size) == 0) {
-        free(masterPubKeyHexSaved);
+    // mastersql
+    Self *s = orma_selectFromSelf(o->db);
+    int64_t count = s->master_pubkeyEq(s, csb(public_key_hex))->count(s);
+    if (count == 1)
+    {
+        dbg(LOGLEVEL_DEBUG, "is master %s: YES", public_key_hex);
         return true;
-    } else {
-        free(masterPubKeyHexSaved);
-        return false;
     }
+
+    dbg(LOGLEVEL_DEBUG, "is master %s: no", public_key_hex);
+    return false;
 }
 
 void getGroupIdHex_groupnumber(const Tox *tox, uint32_t group_number, char *hex)
@@ -1451,7 +1238,8 @@ void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_n
                 dbg(0, "conference id unknown?");
                 return;
             } else {
-                // ** DISABLE ** // writeConferenceMessageHelper(tox, conference_id_buffer, message, length, public_key_hex, 0);
+                // ** DISABLE ** //
+                // Conference messages no longer supported
             }
         }
     }
@@ -1465,140 +1253,6 @@ void conference_peer_list_changed_cb(Tox *tox, uint32_t UNUSED(conference_number
 void friend_sync_message_v2_cb(Tox *UNUSED(tox), uint32_t UNUSED(friend_number), const uint8_t *UNUSED(message), size_t UNUSED(length))
 {
     dbg(9, "enter friend_sync_message_v2_cb");
-}
-
-/* TODO: CHECK */
-bool is_answer_to_synced_message(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t UNUSED(length))
-{
-    bool ret = false;
-
-    uint8_t public_key_bin[tox_public_key_size()];
-    CLEAR(public_key_bin);
-
-    tox_friend_get_public_key(tox, friend_number, public_key_bin, NULL);
-
-    char public_key_hex[tox_public_key_hex_size];
-    CLEAR(public_key_hex);
-
-    bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
-
-    uint8_t *msg_id = calloc(1, tox_public_key_size());
-    if (msg_id)
-    {
-        tox_messagev2_get_message_id(message, msg_id);
-
-        char msgid2_str[tox_public_key_hex_size + 1];
-        CLEAR(msgid2_str);
-        bin2upHex(msg_id, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
-
-        dbg(2, "is_answer_to_synced_message: receipt from %s id __%s__", public_key_hex, msgid2_str);
-
-        // find that message and delete the file for it ----------------
-
-        mkdir(msgsDir, S_IRWXU);
-        DIR *dfd_m = opendir(msgsDir);
-        if (dfd_m == NULL)
-        {
-            free(msg_id);
-            return false;
-        }
-
-        struct dirent *dp_m = NULL;
-
-        while ((dp_m = readdir(dfd_m)) != NULL)
-        {
-            if (strlen(dp_m->d_name) > 2)
-            {
-                if (strncmp(dp_m->d_name, ".", 1) != 0 && strncmp(dp_m->d_name, "..", 2) != 0)
-                {
-                    // ****************************************
-                    // dbg(2, "is_answer_to_synced_message: looping file:001:%s", dp_m->d_name);
-
-                    char *friendDir = calloc(1, strlen(msgsDir) + 1 + strlen(dp_m->d_name) + 1);
-                    sprintf(friendDir, "%s/%s", msgsDir, dp_m->d_name);
-
-                    // dbg(2, "is_answer_to_synced_message: looping file:002:%s", friendDir);
-
-                    mkdir(msgsDir, S_IRWXU);
-                    DIR *dfd = opendir(friendDir);
-                    if (dfd == NULL)
-                    {
-                        free(friendDir);
-                        free(msg_id);
-                        return false;
-                    }
-
-                    struct dirent *dp = NULL;
-
-#define BASE_NAME_GLOB_LEN 31
-#define END_PART_GLOB_LEN 68
-
-                    while ((dp = readdir(dfd)) != NULL)
-                    {
-                        if (strlen(dp->d_name) > 2)
-                        {
-                            if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0)
-                            {
-                                // dbg(2, "is_answer_to_synced_message: looping file:003:%s", dp->d_name);
-
-                                int len = strlen(dp->d_name);
-                                const char *last_char = &dp->d_name[len - 1];
-                                if (strncmp(last_char, "_", 1) == 0)
-                                {
-                                    // dbg(2, "is_answer_to_synced_message: looping file:004:%s", last_char);
-
-                                    const char *last_char2 = &dp->d_name[len - END_PART_GLOB_LEN];
-                                    char *comp_str = calloc(1, (END_PART_GLOB_LEN + 2));
-                                    sprintf(comp_str, "__%s__", msgid2_str);
-
-                                    // dbg(2, "is_answer_to_synced_message: looping file:005:%s", last_char2);
-
-                                    // dbg(2, "is_answer_to_synced_message: looping file:006:%s END_PART_GLOB_LEN=%d", comp_str, (int)END_PART_GLOB_LEN);
-
-                                    if (strncmp(last_char2, comp_str, END_PART_GLOB_LEN) == 0)
-                                    {
-                                        // dbg(2, "is_answer_to_synced_message: found id %s in %s", comp_str, dp->d_name);
-                                        // now delete all files for that id
-                                        char *delete_file_glob = calloc(1, 1000);
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-                                        int ret_snprintf = snprintf(delete_file_glob, BASE_NAME_GLOB_LEN, "%s", dp->d_name);
-#pragma GCC diagnostic pop
-                                        if (ret_snprintf){}
-                                        char *run_cmd = calloc(1, 1000);
-                                        sprintf(run_cmd, "rm %s/%s*", friendDir, delete_file_glob);
-                                        // dbg(2, "is_answer_to_synced_message: running cmd: %s", run_cmd);
-                                        int cmd_res = system(run_cmd);
-                                        if (cmd_res){}
-                                        // dbg(2, "is_answer_to_synced_message: cmd DONE");
-                                        free(run_cmd);
-                                        free(delete_file_glob);
-
-                                        ret = true;
-                                    }
-                                    free(comp_str);
-                                }
-                            }
-                        }
-                    }
-
-                    // find that message and delete the file for it ----------------
-                    closedir(dfd);
-                    free(friendDir);
-
-                    // ****************************************
-                }
-            }
-        }
-
-        closedir(dfd_m);
-
-        free(msg_id);
-        return ret;
-    }
-
-    return false;
 }
 
 void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_t ts_sec, const uint8_t *msgid)
@@ -1668,13 +1322,9 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     dbg(0, "friend_read_receipt_message_v2_cb:public_key_hex=%s", public_key_hex);
     gm->pubkey = csb(public_key_hex);
     // -------
-    char group_msg_uhex[2*raw_message_len + 1];
-    B2UH(raw_message_data, raw_message_len, group_msg_uhex);
-    gm->datahex = csb(group_msg_uhex);
+    ASSIGN_B2UH_CSB(gm->datahex, raw_message_data, raw_message_len);
     // -------
-    char group_wrappedmsg_uhex[2*rawMsgSize2 + 1];
-    B2UH(raw_message2, rawMsgSize2, group_wrappedmsg_uhex);
-    gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+    ASSIGN_B2UH_CSB(gm->wrappeddatahex, raw_message2, rawMsgSize2);
     // -------
     gm->timstamp_recv = (uint32_t)get_unix_time();
     // -------
@@ -1744,13 +1394,18 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
                 // send_text_message_to_friend(tox, friend_number, "Sorry, but this command has not been understood, please check the implementation or contact the developer.");
             }
         } else {
-            // dbg(9, "call writeMessageHelper()");
             // nicht vom master, also wohl ein freund vom master.
 
 
 
 
-
+            if (masterIsOnline == false)
+            {
+                if (ping_push_service() == 1)
+                {
+                    ping_push_service();
+                }
+            }
 
 
 
@@ -1796,13 +1451,9 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             dbg(0, "friend_message_v2_cb:public_key_hex=%s", public_key_hex);
             gm->pubkey = csb(public_key_hex);
             // -------
-            char group_msg_uhex[2*raw_message_len + 1];
-            B2UH(raw_message, raw_message_len, group_msg_uhex);
-            gm->datahex = csb(group_msg_uhex);
+            ASSIGN_B2UH_CSB(gm->datahex, raw_message, raw_message_len);
             // -------
-            char group_wrappedmsg_uhex[2*rawMsgSize2 + 1];
-            B2UH(raw_message2, rawMsgSize2, group_wrappedmsg_uhex);
-            gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+            ASSIGN_B2UH_CSB(gm->wrappeddatahex, raw_message2, rawMsgSize2);
             // -------
             gm->timstamp_recv = (uint32_t)get_unix_time();
             // -------
@@ -1831,14 +1482,6 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
 
 
 
-
-
-
-
-
-
-            // save the message to storage
-            // ** DISABLE ** // writeMessageHelper(tox, friend_number, raw_message, raw_message_len, TOX_FILE_KIND_MESSAGEV2_SEND);
 
             // send back an ACK, that toxproxy has received the message
             if (raw_message_len >= TOX_PUBLIC_KEY_SIZE)
@@ -1890,13 +1533,16 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN) {
         if ((length > NOTI__device_token_min_len) && (length < NOTI__device_token_max_len))
         {
+            // sqltoken
             dbg(0, "received CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN message");
-            NOTIFICATION__device_token = calloc(1, (length + 1));
-            memcpy(NOTIFICATION__device_token, (data + 1), (length - 1));
-            dbg(0, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", NOTIFICATION__device_token);
-            fprintf(stdout, "received token:%s\n", NOTIFICATION__device_token);
+            char* tmp = calloc(1, (length + 1));
+            memcpy(tmp, (data + 1), (length - 1));
+            dbg(0, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", tmp);
+            fprintf(stdout, "received token:%s\n", tmp);
             // save notification token to file
-            add_token(NOTIFICATION__device_token);
+            add_token(tmp);
+            free(tmp);
+            read_token_from_db();
         }
         return;
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_FRIEND_PUBKEY_FOR_PROXY) {
@@ -1919,151 +1565,11 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
     }
 }
 
-void send_sync_msg_single(Tox *tox, char *pubKeyHex, char *msgFileName)
-{
-    char *msgPath = calloc(1, strlen(msgsDir) + 1 + strlen(pubKeyHex) + 1 + strlen(msgFileName) + 1);
-
-    // last +1 is for terminating \0 I guess (without it, memory checker explodes..)
-    sprintf(msgPath, "%s/%s/%s", msgsDir, pubKeyHex, msgFileName);
-
-    char userDir[tox_public_key_hex_size + strlen(msgsDir) + 1 + 1];
-    CLEAR(userDir);
-    sprintf(userDir, "%s/%s", msgsDir, pubKeyHex);
-
-    FILE *f = fopen(msgPath, "rb");
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        long fsize = ftell(f);
-        fseek(f, 0, SEEK_SET);
-
-        if (fsize < 1) {
-            fclose(f);
-            free(msgPath);
-            return;
-        }
-
-        uint8_t *rawMsgData = calloc(1, fsize);
-        size_t ret = fread(rawMsgData, fsize, 1, f);
-
-        // TODO: handle ret return vlaue here!
-        if (ret) {
-            // ------
-        }
-
-        fclose(f);
-
-
-        uint32_t rawMsgSize2 = tox_messagev2_size(fsize, TOX_FILE_KIND_MESSAGEV2_SYNC, 0);
-        uint8_t *raw_message2 = calloc(1, rawMsgSize2);
-        uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
-        uint8_t *pubKeyBin = tox_address_hex_string_to_bin2(pubKeyHex);
-
-        if (msgFileName[strlen(msgFileName) - 1] == 'A') {
-            // TOX_FILE_KIND_MESSAGEV2_ANSWER
-            tox_messagev2_sync_wrap(fsize, pubKeyBin, TOX_FILE_KIND_MESSAGEV2_ANSWER,
-                                    rawMsgData, 665, 987, raw_message2, msgid2);
-            dbg(9, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_ANSWER", raw_message2);
-        } else { // TOX_FILE_KIND_MESSAGEV2_SEND
-            tox_messagev2_sync_wrap(fsize, pubKeyBin, TOX_FILE_KIND_MESSAGEV2_SEND,
-                                    rawMsgData, 987, 775, raw_message2, msgid2);
-            dbg(9, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
-        }
-
-        // save new msgid ----------
-        char msgid2_str[tox_public_key_hex_size + 1];
-        CLEAR(msgid2_str);
-        bin2upHex(msgid2, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
-
-        char msgid_orig_str[tox_public_key_hex_size + 1];
-        CLEAR(msgid_orig_str);
-        bin2upHex(rawMsgData, tox_public_key_size(), msgid_orig_str, tox_public_key_hex_size);
-
-        dbg(9, "send_sync_msg_single:msgid2=%s msgid_orig=%s", msgid2_str, msgid_orig_str);
-
-        char *msgPath_msg_id = calloc(1, 1000);
-        if (msgPath_msg_id)
-        {
-            sprintf(msgPath_msg_id, "%s__%s__", msgPath, msgid2_str);
-            dbg(9, "send_sync_msg_single: writing new msg_id to file: %s", msgPath_msg_id);
-
-            //if (count_file_in_dir(userDir) < max_files)
-            //{
-                FILE *f_msg_id = fopen(msgPath_msg_id, "wb");
-                fwrite(msgid_orig_str, tox_public_key_size(), 1, f_msg_id); // write the original msg_id into the file
-                fclose(f_msg_id);
-            //}
-
-            free(msgPath_msg_id);
-        }
-        // save new msgid ----------
-
-        TOX_ERR_FRIEND_SEND_MESSAGE error;
-        bool res2 = tox_util_friend_send_sync_message_v2(tox, 0, raw_message2, rawMsgSize2, &error);
-        dbg(9, "send_sync_msg_single: send_sync_msg res=%d; error=%d", (int)res2, error);
-
-        free(rawMsgData);
-        free(raw_message2);
-        free(pubKeyBin);
-        free(msgid2);
-
-        // do not delete messages here!! // unlink(msgPath);
-    }
-
-    free(msgPath);
-}
-
-void send_sync_msgs_of_friend(Tox *tox, char *pubKeyHex)
-{
-    // dbg(9, "enter send_sync_msgs_of_friend");
-    // dbg(3, "sending messages of friend: %s to master", pubKeyHex);
-
-    char *friendDir = calloc(1, strlen(msgsDir) + 1 + strlen(pubKeyHex) +
-                             1); // last +1 is for terminating \0 I guess (without it, memory checker explodes..)
-    sprintf(friendDir, "%s/%s", msgsDir, pubKeyHex);
-
-    mkdir(msgsDir, S_IRWXU);
-
-    DIR *dfd = opendir(friendDir);
-
-    if (dfd == NULL) {
-        // dbg(1, "Can't open msgsDir for sending messages to master (maybe no single message has been received yet?)");
-        free(friendDir);
-        return;
-    }
-
-    struct dirent *dp = NULL;
-
-    // char filename_qfd[260];
-    // char new_name_qfd[100];
-
-    while ((dp = readdir(dfd)) != NULL) {
-        if (strlen(dp->d_name) > 2)
-        {
-            if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0)
-            {
-                int len = strlen(dp->d_name);
-                const char *last_char = &dp->d_name[len - 1];
-                if (strncmp(last_char, "_", 1) != 0)
-                {
-                    if (strncmp(dp->d_name, "is.silent", strlen("is.silent")) != 0)
-                    {
-                        dbg(2, "found message by %s with filename %s", pubKeyHex, dp->d_name);
-                        send_sync_msg_single(tox, pubKeyHex, dp->d_name);
-                    }
-                }
-            }
-        }
-    }
-
-    closedir(dfd);
-    free(friendDir);
-}
-
 void send_sync_msgs_of_friend__messages(Tox *tox)
 {
     Message *p = orma_selectFromMessage(o->db);
     MessageList *pl = p->orderBytimstamp_recvAsc(p)->toList(p);
-    dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
+    // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
     Message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
     {
@@ -2101,7 +1607,7 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 {
     Group_message *p = orma_selectFromGroup_message(o->db);
     Group_messageList *pl = p->orderBytimstamp_recvAsc(p)->toList(p);
-    dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
+    // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
     Group_message **pd = pl->l;
     for(int i=0;i<pl->items;i++)
     {
@@ -2136,40 +1642,20 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 }
 
 /*
- * HINT: this function send friend messages and conference and group messages to master
+ * HINT: this function sends friend messages and group messages to master
  */
 void send_sync_msgs(Tox *tox)
 {
     send_sync_msgs_of_friend__groupmsgs(tox);
     send_sync_msgs_of_friend__messages(tox);
-
-    mkdir(msgsDir, S_IRWXU);
-
-    // loop over all directories = public-keys of friends we have received messages from
-    DIR *dfd = opendir(msgsDir);
-
-    if (dfd == NULL) {
-        // dbg(1, "Can't open msgsDir for sending messages to master (maybe no single message has been received yet?)");
-        return;
-    }
-
-    struct dirent *dp = NULL;
-
-    while ((dp = readdir(dfd)) != NULL) {
-        if (strncmp(dp->d_name, ".", 1) != 0 && strncmp(dp->d_name, "..", 2) != 0) {
-            // ** DISBALE ** // send_sync_msgs_of_friend(tox, dp->d_name);
-        }
-    }
-
-    closedir(dfd);
 }
 
-struct string {
+struct curl_string {
     char *ptr;
     size_t len;
 };
 
-static void init_string(struct string *s)
+static void curl_init_string(struct curl_string *s)
 {
     s->len = 0;
     s->ptr = calloc(1, s->len + 1);
@@ -2183,7 +1669,7 @@ static void init_string(struct string *s)
     s->ptr[0] = '\0';
 }
 
-static size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s)
+static size_t curl_writefunc(void *ptr, size_t size, size_t nmemb, struct curl_string *s)
 {
     size_t new_len = s->len + size*nmemb;
     s->ptr = realloc(s->ptr, new_len+1);
@@ -2273,8 +1759,8 @@ static void *notification_thread_func(void *UNUSED(data))
 
                         if (curl)
                         {
-                            struct string s;
-                            init_string(&s);
+                            struct curl_string s;
+                            curl_init_string(&s);
 
                             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
                             curl_easy_setopt(curl, CURLOPT_URL, buf);
@@ -2282,7 +1768,7 @@ static void *notification_thread_func(void *UNUSED(data))
 
                             dbg(9, "request=%s", buf);
 
-                            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+                            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc);
                             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
 
                             res = curl_easy_perform(curl);
@@ -2349,9 +1835,12 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             return;
         } else {
 
-            if (ping_push_service() == 1)
+            if (masterIsOnline == false)
             {
-                ping_push_service();
+                if (ping_push_service() == 1)
+                {
+                    ping_push_service();
+                }
             }
 
             char public_key_hex[tox_public_key_hex_size];
@@ -2422,20 +1911,14 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
 
 
             // -------
-            char group_id_uhex[2*TOX_GROUP_CHAT_ID_SIZE + 1];
-            B2UH(group_id_buffer, TOX_GROUP_CHAT_ID_SIZE, group_id_uhex);
-            gm->groupid = csb(group_id_uhex);
+            ASSIGN_B2UH_CSB(gm->groupid, group_id_buffer, TOX_GROUP_CHAT_ID_SIZE);
             // -------
             dbg(0, "writeConferenceMessageGr:public_key_hex=%s", public_key_hex);
             gm->peerpubkey = csb(public_key_hex);
             // -------
-            char group_msg_uhex[2*length + 1];
-            B2UH(message, length, group_msg_uhex);
-            gm->datahex = csb(group_msg_uhex);
+            ASSIGN_B2UH_CSB(gm->datahex, message, length);
             // -------
-            char group_wrappedmsg_uhex[2*rawMsgSize2 + 1];
-            B2UH(raw_message2, rawMsgSize2, group_wrappedmsg_uhex);
-            gm->wrappeddatahex = csb(group_wrappedmsg_uhex);
+            ASSIGN_B2UH_CSB(gm->wrappeddatahex, raw_message2, rawMsgSize2);
             // -------
             gm->message_id = message_id;
             // -------
@@ -2611,7 +2094,11 @@ int main(int argc, char *argv[])
     fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
     dbg(2, "ToxProxy version: %s", global_version_string);
 
+#ifdef __MINGW32__
+    mkdir(save_dir);
+#else
     mkdir(save_dir, S_IRWXU);
+#endif
     create_db();
 
     use_tor = 0;
@@ -2689,27 +2176,9 @@ int main(int argc, char *argv[])
         }
     }
 
-    read_token_from_file();
+    read_token_from_db();
 
     on_start();
-
-#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
-    curl_global_init(CURL_GLOBAL_ALL);
-    need_send_notification = 0;
-    notification_thread_stop = 0;
-
-    if (pthread_create(&notification_thread, NULL, notification_thread_func, (void *)NULL) != 0)
-    {
-        dbg(0, "Notification Thread create failed");
-    }
-    else
-    {
-#ifndef __APPLE__
-        pthread_setname_np(notification_thread, "t_notif");
-#endif
-        dbg(2, "Notification Thread successfully created");
-    }
-#endif
 
     Tox *tox = openTox();
 
@@ -2718,26 +2187,18 @@ int main(int argc, char *argv[])
     tox_address_hex_size = tox_address_size() * 2 + 1;
     tox_address_hex_size_without_null_termin = tox_address_size() * 2;
 
-    add_all_groups_to_db(tox);
-    add_all_friends_to_db(tox);
-
-    const char *name = "ToxProxy";
-    tox_self_set_name(tox, (uint8_t *) name, strlen(name), NULL);
-
-    const char *status_message = "Proxy for your messages";
-    tox_self_set_status_message(tox, (uint8_t *) status_message, strlen(status_message), NULL);
-
-    bootstrap(tox);
-
     uint8_t tox_id_bin[tox_address_size()];
     tox_self_get_address(tox, tox_id_bin);
 
     char toxid_hbuf[2*tox_address_size() + 1];
     B2UH(tox_id_bin, tox_address_size(), toxid_hbuf);
 
-    // char toxid_binbuf[tox_address_size() + 1];
-    // memset(toxid_binbuf, 0, tox_address_size() + 1);
-    // H2B(toxid_hbuf, toxid_binbuf);
+
+    // HINT: delete any entries with other toxid in the database -----------
+    Self *p2 = orma_deleteFromSelf(o->db);
+    int64_t deleted_rows = p2->toxidNotEq(p2, csc(toxid_hbuf, tox_address_hex_size_without_null_termin))->execute(p2);
+    dbg(LOGLEVEL_DEBUG, "deleted old toxid count: %lld", (long long)deleted_rows);
+    // HINT: delete any entries with other toxid in the database -----------
 
     {
     Self *p = orma_updateSelf(o->db);
@@ -2780,6 +2241,37 @@ int main(int argc, char *argv[])
         fclose(fp2);
     }
 #endif
+
+    migrate_legay_masterfile();
+
+#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+    curl_global_init(CURL_GLOBAL_ALL);
+    need_send_notification = 0;
+    notification_thread_stop = 0;
+
+    if (pthread_create(&notification_thread, NULL, notification_thread_func, (void *)NULL) != 0)
+    {
+        dbg(0, "Notification Thread create failed");
+    }
+    else
+    {
+#ifndef __APPLE__
+        pthread_setname_np(notification_thread, "t_notif");
+#endif
+        dbg(2, "Notification Thread successfully created");
+    }
+#endif
+
+    add_all_groups_to_db(tox);
+    add_all_friends_to_db(tox);
+
+    const char *name = "ToxProxy";
+    tox_self_set_name(tox, (uint8_t *) name, strlen(name), NULL);
+
+    const char *status_message = "Proxy for your messages";
+    tox_self_set_status_message(tox, (uint8_t *) status_message, strlen(status_message), NULL);
+
+    bootstrap(tox);
 
     size_t friends = tox_self_get_friend_list_size(tox);
     dbg(9, "ToxProxy startup completed");
@@ -2829,7 +2321,7 @@ int main(int argc, char *argv[])
     {
         Group_message *p = orma_selectFromGroup_message(o->db);
         Group_messageList *pl = p->toList(p);
-        dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
+        // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
         if (pl->items > 0)
             {
             if (ping_push_service() == 1)
