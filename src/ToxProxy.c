@@ -42,7 +42,7 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 #define WRITE_MY_TOXID_TO_FILE
 
 // define this to have the log statements also printed to stdout and not only into logfile
-#define LOG2STDOUT
+// #define LOG2STDOUT
 
 // define this so every run creates a new (timestamped) logfile and doesn't overwrite previous logfiles.
 // #define UNIQLOGFILE
@@ -55,33 +55,22 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 #include <string.h>
 #include <stdarg.h>
 #include <dirent.h>
-
 #include <sys/types.h>
 #include <sys/stat.h>
-// #include <sys/socket.h>
-// #include <sys/ioctl.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <fcntl.h>
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
-// #include <netdb.h>
-// #include <netinet/in.h>
-
 #include <pthread.h>
-
 #include <signal.h>
-
-// timestamps for printf output
 #include <time.h>
 #include <sys/time.h>
-
-// mkdir -> https://linux.die.net/man/2/mkdir
 #include <sys/stat.h>
 #include <sys/types.h>
 
-// gives bin2hex & hex2bin functions for Tox-ID / public-key conversions
+
 #include <sodium/utils.h>
 
 #include "tox/tox.h"
@@ -176,7 +165,7 @@ typedef enum LOGLEVEL {
     LOGLEVEL_DEBUG = 9,
 } LOGLEVEL;
 
-#define CURRENT_LOG_LEVEL 50 // 0 -> error, 1 -> warn, 2 -> info, 9 -> debug
+#define CURRENT_LOG_LEVEL LOGLEVEL_INFO // log everything including and (numerically) below the CURRENT_LOG_LEVEL
 #define c_sleep(x) usleep_usec(1000*(x))
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
@@ -321,7 +310,8 @@ void dbg(int level, const char *msg, ...)
             break;
     }
 
-    if (level <= CURRENT_LOG_LEVEL) {
+    if (level <= CURRENT_LOG_LEVEL)
+    {
         va_list ap;
 
 // gcc parameter -DLOG2STDOUT for logging to standardout = console
@@ -472,7 +462,10 @@ static void add_group_to_db(const char *groupidhex, const uint32_t len)
     g->groupid = csc(groupidhex, len);
     g->is_silent = false;
     int64_t inserted_id = orma_insertIntoGroup(g);
-    dbg(LOGLEVEL_INFO, "added group to db, inserted id: %lld", (long long)inserted_id);
+    if (inserted_id > -1)
+    {
+        dbg(LOGLEVEL_INFO, "added group to db, inserted id: %lld", (long long)inserted_id);
+    }
     orma_free_Group(g);
 }
 
@@ -483,7 +476,10 @@ static void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bo
     f->is_master = is_master;
     f->is_silent = false;
     int64_t inserted_id = orma_insertIntoFriend(f);
-    dbg(LOGLEVEL_INFO, "added friend to db, inserted id: %lld", (long long)inserted_id);
+    if (inserted_id > -1)
+    {
+        dbg(LOGLEVEL_INFO, "added friend to db, inserted id: %lld", (long long)inserted_id);
+    }
     orma_free_Friend(f);
 }
 
@@ -583,9 +579,9 @@ void killSwitch() __attribute__((noreturn));
 
 void killSwitch()
 {
-    dbg(2, "got killSwitch command, deleting all data");
+    dbg(LOGLEVEL_DEBUG, "got killSwitch command, deleting all data");
     unlink(savedata_filename);
-    dbg(1, "todo implement deleting messages");
+    dbg(LOGLEVEL_WARN, "todo implement deleting messages");
     tox_loop_running = 0;
     exit(0);
 }
@@ -593,7 +589,7 @@ void killSwitch()
 void sigint_handler(int signo)
 {
     if (signo == SIGINT) {
-        printf("received SIGINT, pid=%d\n", getpid());
+        fprintf(stderr, "received SIGINT, pid=%d\n", getpid());
         tox_loop_running = 0;
     }
 }
@@ -652,23 +648,23 @@ Tox *openTox()
     if (use_tor == 0)
     {
         options.udp_enabled = true; // UDP mode
-        dbg(0, "setting UDP mode");
+        dbg(LOGLEVEL_INFO, "setting UDP mode");
     }
     else
     {
         options.udp_enabled = false; // TCP mode
-        dbg(0, "setting TCP mode");
+        dbg(LOGLEVEL_INFO, "setting TCP mode");
     }
 
     if (use_tor == 1)
     {
-        dbg(0, "setting Tor Relay mode");
+        dbg(LOGLEVEL_INFO, "setting Tor Relay mode");
         options.udp_enabled = false; // TCP mode
-        dbg(0, "setting TCP mode");
+        dbg(LOGLEVEL_INFO, "setting TCP mode");
         const char *proxy_host = "127.0.0.1";
-        dbg(0, "setting proxy_host %s", proxy_host);
+        dbg(LOGLEVEL_INFO, "setting proxy_host %s", proxy_host);
         uint16_t proxy_port = PROXY_PORT_TOR_DEFAULT;
-        dbg(0, "setting proxy_port %d", (int)proxy_port);
+        dbg(LOGLEVEL_INFO, "setting proxy_port %d", (int)proxy_port);
         options.proxy_type = TOX_PROXY_TYPE_SOCKS5;
         options.proxy_host = proxy_host;
         options.proxy_port = proxy_port;
@@ -749,23 +745,23 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
         size_t i = (size_t)random_order_nodenums[j];
         bool res = sodium_hex2bin(nodes[i].key_bin, sizeof(nodes[i].key_bin),
                                   nodes[i].key_hex, sizeof(nodes[i].key_hex) - 1, NULL, NULL, NULL);
-        dbg(99, "bootstap_nodes - sodium_hex2bin:res=%d", res);
+        dbg(LOGLEVEL_DEBUG, "bootstap_nodes - sodium_hex2bin:res=%d", res);
 
         TOX_ERR_BOOTSTRAP error;
         res = tox_bootstrap(tox, nodes[i].ip, nodes[i].port, nodes[i].key_bin, &error);
 
         if (res != true) {
             if (error == TOX_ERR_BOOTSTRAP_OK) {
-              dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
+              dbg(LOGLEVEL_DEBUG, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
             } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
-              dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
+              dbg(LOGLEVEL_DEBUG, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
             } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
-              dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
+              dbg(LOGLEVEL_DEBUG, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
             } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
-              dbg(9, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
+              dbg(LOGLEVEL_DEBUG, "bootstrap:%s %d [FALSE]res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
             }
         } else {
-          dbg(9, "bootstrap:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
+          dbg(LOGLEVEL_DEBUG, "bootstrap:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
         }
 
         if (add_as_tcp_relay == 1) {
@@ -774,19 +770,19 @@ void bootstap_nodes(Tox *tox, DHT_node nodes[], int number_of_nodes, int add_as_
 
             if (res != true) {
                 if (error == TOX_ERR_BOOTSTRAP_OK) {
-                  dbg(9, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
+                  dbg(LOGLEVEL_DEBUG, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_OK", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_NULL) {
-                  dbg(9, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
+                  dbg(LOGLEVEL_DEBUG, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_NULL", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_HOST) {
-                  dbg(9, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
+                  dbg(LOGLEVEL_DEBUG, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_BAD_HOST", nodes[i].ip, nodes[i].port);
                 } else if (error == TOX_ERR_BOOTSTRAP_BAD_PORT) {
-                  dbg(9, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
+                  dbg(LOGLEVEL_DEBUG, "add_tcp_relay:%s %d [FALSE] res=TOX_ERR_BOOTSTRAP_BAD_PORT", nodes[i].ip, nodes[i].port);
                 }
             } else {
-              dbg(9, "add_tcp_relay:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
+              dbg(LOGLEVEL_DEBUG, "add_tcp_relay:%s %d [TRUE] res=%d", nodes[i].ip, nodes[i].port, res);
             }
         } else {
-            dbg(2, "Not adding any TCP relays");
+            dbg(LOGLEVEL_DEBUG, "Not adding any TCP relays");
         }
     }
 }
@@ -972,7 +968,12 @@ void migrate_legay_masterfile()
     }
 
     char *legacy_master_pubkey = calloc(1, fsize + 2);
-    size_t res = fread(legacy_master_pubkey, fsize, 1, f);
+    long fsize_corr = fsize;
+    if (fsize > (TOX_PUBLIC_KEY_SIZE * 2))
+    {
+        fsize_corr = TOX_PUBLIC_KEY_SIZE * 2;
+    }
+    size_t res = fread(legacy_master_pubkey, fsize_corr, 1, f);
     if (res) {}
     fclose(f);
 
@@ -999,14 +1000,14 @@ void add_token(const char *token_str)
         }
         else
         {
-            dbg(LOGLEVEL_DEBUG, "inserted pushtoken: %lld %s", (long long)inserted_id, token_str);
+            dbg(LOGLEVEL_INFO, "inserted pushtoken: %lld %s", (long long)inserted_id, token_str);
         }
         orma_free_Lov(p);
         }
     }
     else
     {
-        dbg(LOGLEVEL_DEBUG, "updated pushtoken: %lld %s", (long long)affected_rows3, token_str);
+        dbg(LOGLEVEL_INFO, "updated pushtoken: %lld %s", (long long)affected_rows3, token_str);
     }
 }
 
@@ -1039,8 +1040,26 @@ void read_token_from_db()
 bool is_master(const char *public_key_hex)
 {
     // mastersql
+
+    // --------- DEBUG ---------
+    // --------- DEBUG ---------
+    // --------- DEBUG ---------
+    /*
     Self *s = orma_selectFromSelf(o->db);
-    int64_t count = s->master_pubkeyEq(s, csb(public_key_hex))->count(s);
+    SelfList *sl = s->toList(s);
+    Self **pd = sl->l;
+    for(int i=0;i<sl->items;i++)
+    {
+        dbg(LOGLEVEL_DEBUG, "masterpubkey: _%s_ compare pk: _%s_", (*pd)->master_pubkey->s, public_key_hex);
+    }
+    orma_free_SelfList(sl);
+     */
+    // --------- DEBUG ---------
+    // --------- DEBUG ---------
+    // --------- DEBUG ---------
+
+    Self *s2 = orma_selectFromSelf(o->db);
+    int64_t count = s2->master_pubkeyEq(s2, csb(public_key_hex))->count(s2);
     if (count == 1)
     {
         dbg(LOGLEVEL_DEBUG, "is master %s: YES", public_key_hex);
@@ -1087,6 +1106,7 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
 
     if (friends == 0) {
         // add first friend as master for this proxy
+        dbg(LOGLEVEL_INFO, "add first friend as master for this proxy");
         add_master(public_key_hex);
         tox_friend_add_norequest(tox, public_key, NULL);
         add_friend_to_db(public_key_hex, tox_public_key_hex_size_without_null_termin, true);
@@ -1096,11 +1116,11 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
         return;
     }
 
-    dbg(2, "Got currently %zu friends. New friend request from %s with message: %s",
+    dbg(LOGLEVEL_INFO, "Got currently %zu friends. New friend request from %s with message: %s",
                 friends, public_key_hex, message);
 
     friends = tox_self_get_friend_list_size(tox);
-    dbg(2, "Added friend: %s. Number of total friends: %zu", public_key_hex, friends);
+    dbg(LOGLEVEL_INFO, "Added friend: %s. Number of total friends: %zu", public_key_hex, friends);
 }
 
 void friend_message_cb(Tox *UNUSED(tox), uint32_t friend_number, TOX_MESSAGE_TYPE UNUSED(type), const uint8_t *UNUSED(message),
@@ -1109,7 +1129,7 @@ void friend_message_cb(Tox *UNUSED(tox), uint32_t friend_number, TOX_MESSAGE_TYP
     // char *default_msg = "YOU are using the old Message format! this is not supported!";
     // tox_friend_send_message(tox, friend_number, type, (uint8_t *) default_msg, strlen(default_msg), NULL);
 
-    dbg(2, "YOU are using the old Message: fnum=%d", friend_number);
+    dbg(LOGLEVEL_WARN, "YOU are using the old Message format: fnum=%d", friend_number);
 }
 
 //
@@ -1117,19 +1137,20 @@ void friend_message_cb(Tox *UNUSED(tox), uint32_t friend_number, TOX_MESSAGE_TYP
 //
 void send_text_message_to_friend(Tox *tox, uint32_t friend_number, const char *fmt, ...)
 {
-    dbg(9, "sending message to friend %d", friend_number);
-    char msg2[1000];
+    dbg(LOGLEVEL_DEBUG, "sending message to friend %d", friend_number);
+    const int max_msg_len = 1000;
+    char msg2[max_msg_len];
     CLEAR(msg2);
     size_t length = 0;
 
     if (fmt == NULL) {
-        dbg(9, "send_text_message_to_friend:no message to send");
+        dbg(LOGLEVEL_WARN, "send_text_message_to_friend:no message to send");
         return;
     }
 
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(msg2, 999, fmt, ap);
+    vsnprintf(msg2, (max_msg_len - 1), fmt, ap);
     va_end(ap);
     length = (size_t) strlen(msg2);
 #ifdef TOX_HAVE_TOXUTIL
@@ -1145,14 +1166,14 @@ void send_text_message_to_friend(Tox *tox, uint32_t friend_number, const char *f
 void friendlist_onConnectionChange(Tox *tox, uint32_t friend_number, TOX_CONNECTION connection_status, void *UNUSED(user_data))
 {
 
-    dbg(2, "friendlist_onConnectionChange:*READY*:friendnum=%d %d", (int) friend_number, (int) connection_status);
+    dbg(LOGLEVEL_DEBUG, "friendlist_onConnectionChange:*READY*:friendnum=%d %d", (int) friend_number, (int) connection_status);
 
     if (is_master_friendnumber(tox, friend_number)) {
         if (connection_status != TOX_CONNECTION_NONE) {
-            dbg(2, "master is online, send him all cached unsent messages");
+            dbg(LOGLEVEL_INFO, "master is online, send him all cached unsent messages");
             masterIsOnline = true;
         } else {
-            dbg(2, "master went offline, don't send him any more messages.");
+            dbg(LOGLEVEL_INFO, "master went offline, don't send him any more messages.");
             masterIsOnline = false;
         }
     }
@@ -1162,22 +1183,22 @@ void self_connection_status_cb(Tox *UNUSED(tox), TOX_CONNECTION connection_statu
 {
     switch (connection_status) {
         case TOX_CONNECTION_NONE:
-            dbg(2, "Connection Status changed to: Offline");
-            fprintf(stdout, "Connection Status changed to:Offline\n");
+            dbg(LOGLEVEL_INFO, "Connection Status changed to: Offline");
+            fprintf(stderr, "Connection Status changed to:Offline\n");
             my_connection_status = TOX_CONNECTION_NONE;
             on_offline();
             break;
 
         case TOX_CONNECTION_TCP:
-            dbg(2, "Connection Status changed to: Online via TCP");
-            fprintf(stdout, "Connection Status changed to:Online via TCP\n");
+            dbg(LOGLEVEL_INFO, "Connection Status changed to: Online via TCP");
+            fprintf(stderr, "Connection Status changed to:Online via TCP\n");
             my_connection_status = TOX_CONNECTION_TCP;
             on_online();
             break;
 
         case TOX_CONNECTION_UDP:
-            dbg(2, "Connection Status changed to: Online via UDP");
-            fprintf(stdout, "Connection Status changed to:Online via UDP\n");
+            dbg(LOGLEVEL_INFO, "Connection Status changed to: Online via UDP");
+            fprintf(stderr, "Connection Status changed to:Online via UDP\n");
             my_connection_status = TOX_CONNECTION_UDP;
             on_online();
             break;
@@ -1191,19 +1212,19 @@ void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE 
         uint8_t *f_name = get_friend_name(tox, friend_number);
         if (f_name)
         {
-            dbg(0, "received conference invite from somebody who's not master!:fnum=%d:fname=%s", friend_number, (char *)f_name);
+            dbg(LOGLEVEL_DEBUG, "received conference invite from somebody who's not master!:fnum=%d:fname=%s", friend_number, (char *)f_name);
         }
         else
         {
-            dbg(0, "received conference invite from somebody who's not master!:fnum=%d", friend_number);
+            dbg(LOGLEVEL_DEBUG, "received conference invite from somebody who's not master!:fnum=%d", friend_number);
         }
         return;
     }
 
-    dbg(0, "received conference invite from fnum:%d", friend_number);
+    dbg(LOGLEVEL_DEBUG, "received conference invite from fnum:%d", friend_number);
     long conference_num = tox_conference_join(tox, friend_number, cookie, length, NULL);
 
-    dbg(0, "received conference join: res=%d", (int)conference_num);
+    dbg(LOGLEVEL_DEBUG, "received conference join: res=%d", (int)conference_num);
 
     updateToxSavedata(tox);
 }
@@ -1211,8 +1232,8 @@ void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE 
 void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, TOX_MESSAGE_TYPE UNUSED(type),
                            const uint8_t *UNUSED(message), size_t UNUSED(length), void *UNUSED(user_data))
 {
-    dbg(9, "enter conference_message_cb");
-    dbg(0, "received conference text message conf:%d peer:%d", conference_number, peer_number);
+    dbg(LOGLEVEL_DEBUG, "enter conference_message_cb");
+    dbg(LOGLEVEL_DEBUG, "received conference text message conf:%d peer:%d", conference_number, peer_number);
 
     uint8_t public_key_bin[TOX_PUBLIC_KEY_SIZE];
     CLEAR(public_key_bin);
@@ -1220,7 +1241,7 @@ void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_n
     bool res = tox_conference_peer_get_public_key(tox, conference_number, peer_number, public_key_bin, &error);
 
     if (res == false) {
-        dbg(0, "received conference text message from peer without pubkey?");
+        dbg(LOGLEVEL_WARN, "received conference text message from peer without pubkey?");
         return;
     } else {
         char public_key_hex[tox_public_key_hex_size];
@@ -1228,14 +1249,14 @@ void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_n
         bin2upHex(public_key_bin, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
 
         if (is_master(public_key_hex)) {
-            dbg(0, "received conference text message from master");
+            dbg(LOGLEVEL_DEBUG, "received conference text message from master");
         } else {
             uint8_t conference_id_buffer[TOX_CONFERENCE_ID_SIZE + 1];
             CLEAR(conference_id_buffer);
             bool res2 = tox_conference_get_id(tox, conference_number, conference_id_buffer);
 
             if (res2 == false) {
-                dbg(0, "conference id unknown?");
+                dbg(LOGLEVEL_WARN, "conference id unknown?");
                 return;
             } else {
                 // ** DISABLE ** //
@@ -1252,7 +1273,7 @@ void conference_peer_list_changed_cb(Tox *tox, uint32_t UNUSED(conference_number
 
 void friend_sync_message_v2_cb(Tox *UNUSED(tox), uint32_t UNUSED(friend_number), const uint8_t *UNUSED(message), size_t UNUSED(length))
 {
-    dbg(9, "enter friend_sync_message_v2_cb");
+    dbg(LOGLEVEL_DEBUG, "enter friend_sync_message_v2_cb");
 }
 
 void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_t ts_sec, const uint8_t *msgid)
@@ -1261,12 +1282,12 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     CLEAR(msgid2_str);
     bin2upHex(msgid, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
 
-    dbg(9, "enter friend_read_receipt_message_v2_cb:msgid=%s", msgid2_str);
+    dbg(LOGLEVEL_DEBUG, "enter friend_read_receipt_message_v2_cb:msgid=%s", msgid2_str);
 
     // HINT: delete group messages for that incoming receipt, if any
     Group_message *p = orma_deleteFromGroup_message(o->db);
     int64_t affected_rows2 = p->message_sync_hashidEq(p, csb(msgid2_str))->execute(p);
-    printf("deleteFromGroup_message: affected rows: %d\n", (int)affected_rows2);
+    dbg(LOGLEVEL_DEBUG, "deleteFromGroup_message: affected rows: %d\n", (int)affected_rows2);
     if (affected_rows2 > 0)
     {
         return;
@@ -1275,7 +1296,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     // HINT: delete messages for that incoming receipt, if any
     Message *m = orma_deleteFromMessage(o->db);
     int64_t affected_rows3 = m->message_sync_hashidEq(m, csb(msgid2_str))->execute(m);
-    printf("deleteFromMessage: affected rows: %d\n", (int)affected_rows3);
+    dbg(LOGLEVEL_DEBUG, "deleteFromMessage: affected rows: %d\n", (int)affected_rows3);
     if (affected_rows3 > 0)
     {
         return;
@@ -1311,15 +1332,15 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     uint8_t *msgid3 = calloc(1, TOX_PUBLIC_KEY_SIZE);
     tox_messagev2_sync_wrap(raw_message_len, public_key_bin, TOX_FILE_KIND_MESSAGEV2_ANSWER,
                             raw_message_data, 987, 775, raw_message2, msgid3);
-    dbg(9, "friend_read_receipt_message_v2_cb: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
+    dbg(LOGLEVEL_DEBUG, "friend_read_receipt_message_v2_cb: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
     char msgid3_str[tox_public_key_hex_size + 1];
     CLEAR(msgid3_str);
     bin2upHex(msgid3, tox_public_key_size(), msgid3_str, tox_public_key_hex_size);
-    dbg(9, "friend_read_receipt_message_v2_cb:msgid2=%s msgid_orig=%s", msgid3_str, msgid2_str);
+    dbg(LOGLEVEL_DEBUG, "friend_read_receipt_message_v2_cb:msgid2=%s msgid_orig=%s", msgid3_str, msgid2_str);
 
 
     // -------
-    dbg(0, "friend_read_receipt_message_v2_cb:public_key_hex=%s", public_key_hex);
+    dbg(LOGLEVEL_DEBUG, "friend_read_receipt_message_v2_cb:public_key_hex=%s", public_key_hex);
     gm->pubkey = csb(public_key_hex);
     // -------
     ASSIGN_B2UH_CSB(gm->datahex, raw_message_data, raw_message_len);
@@ -1337,7 +1358,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     // -------
     int64_t inserted_id = orma_insertIntoMessage(gm);
     orma_free_Message(gm);
-    dbg(LOGLEVEL_INFO, "Message ACK inserted id: %lld", (long long)inserted_id);
+    dbg(LOGLEVEL_DEBUG, "Message ACK inserted id: %lld", (long long)inserted_id);
 
     free(msgid3);
     free(raw_message2);
@@ -1358,7 +1379,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
 
 void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_message, size_t raw_message_len)
 {
-    dbg(9, "enter friend_message_v2_cb");
+    dbg(LOGLEVEL_DEBUG, "enter friend_message_v2_cb");
 
 #ifdef TOX_HAVE_TOXUTIL
     // now get the real data from msgV2 buffer
@@ -1370,7 +1391,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
         uint32_t text_length = 0;
         bool UNUSED(res) = tox_messagev2_get_message_text(raw_message, (uint32_t) raw_message_len, (bool) false, (uint32_t) 0,
                    message_text, &text_length);
-        // dbg(9, "friend_message_v2_cb:fn=%d res=%d msg=%s", (int) friend_number, (int) res, (char *) message_text);
+        // dbg(LOGLEVEL_DEBUG, "friend_message_v2_cb:fn=%d res=%d msg=%s", (int) friend_number, (int) res, (char *) message_text);
 
         if (is_master_friendnumber(tox, friend_number)) {
             if ((strlen((char *) message_text) == (strlen("fp:") + tox_public_key_hex_size))
@@ -1430,7 +1451,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             char msg_id_str[tox_public_key_hex_size + 1];
             CLEAR(msg_id_str);
             bin2upHex(msg_id, tox_public_key_size(), msg_id_str, tox_public_key_hex_size);
-            dbg(2, "friend_message_v2_cb:New message from %s msg_type=%d msg_id=%s", public_key_hex, TOX_FILE_KIND_MESSAGEV2_SEND, msg_id_str);
+            dbg(LOGLEVEL_DEBUG, "friend_message_v2_cb:New message from %s msg_type=%d msg_id=%s", public_key_hex, TOX_FILE_KIND_MESSAGEV2_SEND, msg_id_str);
             free(msg_id);
 
             // ----------------------
@@ -1440,15 +1461,15 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
             tox_messagev2_sync_wrap(raw_message_len, public_key_bin, TOX_FILE_KIND_MESSAGEV2_SEND,
                                     raw_message, 987, 775, raw_message2, msgid2);
-            dbg(9, "friend_message_v2_cb: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
+            dbg(LOGLEVEL_DEBUG, "friend_message_v2_cb: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
             char msgid2_str[tox_public_key_hex_size + 1];
             CLEAR(msgid2_str);
             bin2upHex(msgid2, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
-            dbg(9, "friend_message_v2_cb:msgid2=%s msgid_orig=%s", msgid2_str, msg_id_str);
+            dbg(LOGLEVEL_DEBUG, "friend_message_v2_cb:msgid2=%s msgid_orig=%s", msgid2_str, msg_id_str);
 
 
             // -------
-            dbg(0, "friend_message_v2_cb:public_key_hex=%s", public_key_hex);
+            dbg(LOGLEVEL_DEBUG, "friend_message_v2_cb:public_key_hex=%s", public_key_hex);
             gm->pubkey = csb(public_key_hex);
             // -------
             ASSIGN_B2UH_CSB(gm->datahex, raw_message, raw_message_len);
@@ -1466,7 +1487,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
             // -------
             int64_t inserted_id = orma_insertIntoMessage(gm);
             orma_free_Message(gm);
-            dbg(LOGLEVEL_INFO, "Message inserted id: %lld", (long long)inserted_id);
+            dbg(LOGLEVEL_DEBUG, "Message inserted id: %lld", (long long)inserted_id);
 
             free(msgid2);
             free(raw_message2);
@@ -1492,7 +1513,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
                 char msgid_acked_str[tox_public_key_hex_size + 1];
                 CLEAR(msgid_acked_str);
                 bin2upHex(msgid_acked, tox_public_key_size(), msgid_acked_str, tox_public_key_hex_size);
-                dbg(9, "friend_message_v2_cb:msgid_acked=%s", msgid_acked_str);
+                dbg(LOGLEVEL_DEBUG, "friend_message_v2_cb:msgid_acked=%s", msgid_acked_str);
 
                 tox_util_friend_send_msg_receipt_v2(tox, friend_number, msgid_acked, 0);
             }
@@ -1506,10 +1527,10 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
 
 void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *UNUSED(user_data))
 {
-    dbg(9, "enter friend_lossless_packet_cb");
+    dbg(LOGLEVEL_DEBUG, "enter friend_lossless_packet_cb");
 
     if (length == 0) {
-        dbg(0, "received empty lossless package!");
+        dbg(LOGLEVEL_DEBUG, "received empty lossless package!");
         return;
     }
 
@@ -1518,11 +1539,11 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         {
             if (length > 0)
             {
-                dbg(0, "received lossless package from somebody who's not master! : id=%d", (int)data[0]);
+                dbg(LOGLEVEL_DEBUG, "received lossless package from somebody who's not master! : id=%d", (int)data[0]);
             }
             else
             {
-                dbg(0, "received lossless package from somebody who's not master!");
+                dbg(LOGLEVEL_DEBUG, "received lossless package from somebody who's not master!");
             }
         }
         return;
@@ -1534,11 +1555,11 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         if ((length > NOTI__device_token_min_len) && (length < NOTI__device_token_max_len))
         {
             // sqltoken
-            dbg(0, "received CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN message");
+            dbg(LOGLEVEL_DEBUG, "received CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN message");
             char* tmp = calloc(1, (length + 1));
             memcpy(tmp, (data + 1), (length - 1));
-            dbg(0, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", tmp);
-            fprintf(stdout, "received token:%s\n", tmp);
+            dbg(LOGLEVEL_DEBUG, "CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN: %s", tmp);
+            fprintf(stderr, "received token:%s\n", tmp);
             // save notification token to file
             add_token(tmp);
             free(tmp);
@@ -1547,7 +1568,7 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         return;
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_FRIEND_PUBKEY_FOR_PROXY) {
         if (length != tox_public_key_size() + 1) {
-            dbg(0, "received ControlProxyMessageType_pubKey message with wrong size");
+            dbg(LOGLEVEL_WARN, "received ControlProxyMessageType_pubKey message with wrong size");
             return;
         }
 
@@ -1557,11 +1578,11 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         char public_key_hex[tox_public_key_hex_size];
         CLEAR(public_key_hex);
         bin2upHex(public_key, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
-        dbg(0, "added friend of my master (norequest) with pubkey: %s", public_key_hex);
+        dbg(LOGLEVEL_DEBUG, "added friend of my master (norequest) with pubkey: %s", public_key_hex);
     } else if (data[0] == 170) {
         // toxutil.c CAP_PACKET_ID
     } else {
-        dbg(0, "received unexpected ControlProxyMessageType:id=%d", (int)data[0]);
+        dbg(LOGLEVEL_INFO, "received unexpected ControlProxyMessageType:id=%d", (int)data[0]);
     }
 }
 
@@ -1583,12 +1604,6 @@ void send_sync_msgs_of_friend__messages(Tox *tox)
                 }
             }
         }
-        printf("FM: id=%ld\n", (*pd)->id);
-        printf("FM: message_id=\"%d\"\n", (uint32_t)(*pd)->message_id);
-        printf("FM: message_text_length_hex=\"%d\"\n", (*pd)->datahex->l);
-        printf("FM: pubkey len=\"%d\"\n", (*pd)->pubkey->l);
-        printf("FM: pubkey str=\"%s\"\n", (*pd)->pubkey->s);
-
         uint32_t rawMsgSize2 = ((*pd)->wrappeddatahex->l) / 2;
         uint8_t raw_message2[rawMsgSize2 + 1];
         memset(raw_message2, 0, (rawMsgSize2 + 1));
@@ -1596,7 +1611,7 @@ void send_sync_msgs_of_friend__messages(Tox *tox)
 
         TOX_ERR_FRIEND_SEND_MESSAGE error;
         bool res2 = tox_util_friend_send_sync_message_v2(tox, 0, raw_message2, rawMsgSize2, &error);
-        dbg(9, "send_sync_msgs_of_friend__messages: send_sync_msg res=%d; error=%d", (int)res2, error);
+        dbg(LOGLEVEL_DEBUG, "send_sync_msgs_of_friend__messages: send_sync_msg res=%d; error=%d", (int)res2, error);
 
         pd++;
     }
@@ -1621,12 +1636,6 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
                 }
             }
         }
-        printf("GM: id=%ld\n", (*pd)->id);
-        printf("GM: message_id=\"%d\"\n", (uint32_t)(*pd)->message_id);
-        printf("GM: message_text_length_hex=\"%d\"\n", (*pd)->datahex->l);
-        printf("GM: peerpubkey len=\"%d\"\n", (*pd)->peerpubkey->l);
-        printf("GM: peerpubkey str=\"%s\"\n", (*pd)->peerpubkey->s);
-
         uint32_t rawMsgSize2 = ((*pd)->wrappeddatahex->l) / 2;
         uint8_t raw_message2[rawMsgSize2 + 1];
         memset(raw_message2, 0, (rawMsgSize2 + 1));
@@ -1634,7 +1643,7 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 
         TOX_ERR_FRIEND_SEND_MESSAGE error;
         bool res2 = tox_util_friend_send_sync_message_v2(tox, 0, raw_message2, rawMsgSize2, &error);
-        dbg(9, "send_sync_msgs_of_friend__groupmsgs: send_sync_msg res=%d; error=%d", (int)res2, error);
+        dbg(LOGLEVEL_DEBUG, "send_sync_msgs_of_friend__groupmsgs: send_sync_msg res=%d; error=%d", (int)res2, error);
 
         pd++;
     }
@@ -1662,7 +1671,7 @@ static void curl_init_string(struct curl_string *s)
 
     if (s->ptr == NULL)
     {
-        dbg(9, "malloc() failed");
+        dbg(LOGLEVEL_ERROR, "malloc() failed");
         exit(EXIT_FAILURE);
     }
 
@@ -1676,7 +1685,7 @@ static size_t curl_writefunc(void *ptr, size_t size, size_t nmemb, struct curl_s
 
     if (s->ptr == NULL)
     {
-        dbg(9, "realloc() failed");
+        dbg(LOGLEVEL_ERROR, "realloc() failed");
         exit(EXIT_FAILURE);
     }
 
@@ -1693,23 +1702,23 @@ static size_t curl_writefunc(void *ptr, size_t size, size_t nmemb, struct curl_s
  */
 int ping_push_service()
 {
-    dbg(9, "ping_push_service");
+    dbg(LOGLEVEL_DEBUG, "ping_push_service");
 
     if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_NONE)
     {
-        dbg(9, "ping_push_service:NOTIFICATION_METHOD NONE");
+        dbg(LOGLEVEL_DEBUG, "ping_push_service:NOTIFICATION_METHOD NONE");
         return 1;
     }
 
     if (!NOTIFICATION__device_token)
     {
-        dbg(9, "ping_push_service: No NOTIFICATION__device_token");
+        dbg(LOGLEVEL_DEBUG, "ping_push_service: No NOTIFICATION__device_token");
         return 1;
     }
 
     if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
     {
-        dbg(9, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
+        dbg(LOGLEVEL_DEBUG, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
         need_send_notification = 1;
         return 1;
     }
@@ -1734,7 +1743,7 @@ static void *notification_thread_func(void *UNUSED(data))
             {
                 if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
                 {
-                    dbg(9, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
+                    dbg(LOGLEVEL_DEBUG, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
                     int result = 1;
                     CURL *curl = NULL;
                     CURLcode res = 0;
@@ -1766,7 +1775,7 @@ static void *notification_thread_func(void *UNUSED(data))
                             curl_easy_setopt(curl, CURLOPT_URL, buf);
                             curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
 
-                            dbg(9, "request=%s", buf);
+                            dbg(LOGLEVEL_DEBUG, "request=%s", buf);
 
                             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc);
                             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
@@ -1775,7 +1784,7 @@ static void *notification_thread_func(void *UNUSED(data))
 
                             if (res != CURLE_OK)
                             {
-                                dbg(9, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
+                                dbg(LOGLEVEL_DEBUG, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
                             }
                             else
                             {
@@ -1783,12 +1792,12 @@ static void *notification_thread_func(void *UNUSED(data))
                                 curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
                                 if ((http_code < 300) && (http_code > 199))
                                 {
-                                    dbg(9, "server_answer:OK:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
+                                    dbg(LOGLEVEL_DEBUG, "server_answer:OK:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
                                     result = 0;
                                 }
                                 else
                                 {
-                                    dbg(9, "server_answer:ERROR:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
+                                    dbg(LOGLEVEL_DEBUG, "server_answer:ERROR:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
                                     result = 0; // do not retry, or the server may be spammed
                                 }
                                 free(s.ptr);
@@ -1809,14 +1818,14 @@ static void *notification_thread_func(void *UNUSED(data))
         usleep_usec(1000 * 500); // sleep 500 ms
     }
 
-    dbg(2, "Notification:Clean thread exit!");
+    dbg(LOGLEVEL_INFO, "Notification:Clean thread exit!");
     pthread_exit(0);
 }
 
 static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer_number, TOX_MESSAGE_TYPE UNUSED(type),
                                    const uint8_t *message, size_t length, uint32_t message_id, void *UNUSED(userdata))
 {
-    dbg(0, "received group text message group:%d peer:%d", groupnumber, peer_number);
+    dbg(LOGLEVEL_DEBUG, "received group text message group:%d peer:%d", groupnumber, peer_number);
 
     uint8_t public_key_bin[TOX_GROUP_PEER_PUBLIC_KEY_SIZE];
     CLEAR(public_key_bin);
@@ -1824,14 +1833,14 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
     bool res = tox_group_peer_get_public_key(tox, groupnumber, peer_number, public_key_bin, &error);
 
     if (res == false) {
-        dbg(0, "received group text message from peer without pubkey?");
+        dbg(LOGLEVEL_DEBUG, "received group text message from peer without pubkey?");
         return;
     } else {
         uint8_t group_id_buffer[TOX_GROUP_CHAT_ID_SIZE];
         CLEAR(group_id_buffer);
         bool res2 = tox_group_get_chat_id(tox, groupnumber, group_id_buffer, NULL);
         if (res2 == false) {
-            dbg(0, "group id unknown?");
+            dbg(LOGLEVEL_WARN, "group id unknown?");
             return;
         } else {
 
@@ -1878,7 +1887,7 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             memcpy(message_m + 64 + HEX_MSG_NUM_LEN_COLON, message, length);
 
             uint32_t raw_message_len = tox_messagev2_size(length_m_text, TOX_FILE_KIND_MESSAGEV2_SEND, 0);
-            dbg(0, "writeConferenceMessageGr:raw_message_len=%d length_m_text=%d", raw_message_len, (int)length_m_text);
+            dbg(LOGLEVEL_DEBUG, "writeConferenceMessageGr:raw_message_len=%d length_m_text=%d", raw_message_len, (int)length_m_text);
             uint8_t *raw_message_data = calloc(1, raw_message_len);
             uint32_t ts_sec = (uint32_t)get_unix_time();
             char msgid[TOX_PUBLIC_KEY_SIZE];
@@ -1891,7 +1900,7 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             char msg_id_hex[tox_public_key_hex_size];
             CLEAR(msg_id_hex);
             bin2upHex((const uint8_t *)msgid, tox_public_key_size(), msg_id_hex, tox_public_key_hex_size);
-            dbg(0, "writeConferenceMessageGr:msg_id_hex=%s", msg_id_hex);
+            dbg(LOGLEVEL_DEBUG, "writeConferenceMessageGr:msg_id_hex=%s", msg_id_hex);
 
 
 
@@ -1902,18 +1911,18 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             uint8_t *msgid2 = calloc(1, TOX_PUBLIC_KEY_SIZE);
             tox_messagev2_sync_wrap(raw_message_len, group_id_buffer, TOX_FILE_KIND_MESSAGEV2_SEND,
                                     raw_message_data, 987, 775, raw_message2, msgid2);
-            dbg(9, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
+            dbg(LOGLEVEL_DEBUG, "send_sync_msg_single: wrapped raw message = %p TOX_FILE_KIND_MESSAGEV2_SEND", raw_message2);
             char msgid2_str[tox_public_key_hex_size + 1];
             CLEAR(msgid2_str);
             bin2upHex(msgid2, tox_public_key_size(), msgid2_str, tox_public_key_hex_size);
-            dbg(9, "send_sync_msg_single:msgid2=%s msgid_orig=%s", msgid2_str, msg_id_hex);
+            dbg(LOGLEVEL_DEBUG, "send_sync_msg_single:msgid2=%s msgid_orig=%s", msgid2_str, msg_id_hex);
 
 
 
             // -------
             ASSIGN_B2UH_CSB(gm->groupid, group_id_buffer, TOX_GROUP_CHAT_ID_SIZE);
             // -------
-            dbg(0, "writeConferenceMessageGr:public_key_hex=%s", public_key_hex);
+            dbg(LOGLEVEL_DEBUG, "writeConferenceMessageGr:public_key_hex=%s", public_key_hex);
             gm->peerpubkey = csb(public_key_hex);
             // -------
             ASSIGN_B2UH_CSB(gm->datahex, message, length);
@@ -1931,7 +1940,7 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
             // -------
             int64_t inserted_id = orma_insertIntoGroup_message(gm);
             orma_free_Group_message(gm);
-            dbg(LOGLEVEL_INFO, "group_message inserted id: %lld", (long long)inserted_id);
+            dbg(LOGLEVEL_DEBUG, "group_message inserted id: %lld", (long long)inserted_id);
 
             free(message_m);
             free(raw_message_data);
@@ -1963,7 +1972,7 @@ static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *inv
 
     if (new_grp_num == UINT32_MAX)
     {
-        dbg(LOGLEVEL_ERROR, "tox_group_invite_accept failed");
+        dbg(LOGLEVEL_WARN, "tox_group_invite_accept failed");
     }
     else
     {
@@ -1986,7 +1995,7 @@ static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *inv
 
 static void group_peer_join_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, void *UNUSED(user_data))
 {
-    dbg(2, "Peer %d joined group %d", peer_id, group_number);
+    dbg(LOGLEVEL_DEBUG, "Peer %d joined group %d", peer_id, group_number);
     updateToxSavedata(tox);
 }
 
@@ -1996,22 +2005,22 @@ static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id
 {
     switch (exit_type) {
         case TOX_GROUP_EXIT_TYPE_QUIT:
-        dbg(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_QUIT", peer_id, group_number, exit_type);
+        dbg(LOGLEVEL_DEBUG, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_QUIT", peer_id, group_number, exit_type);
             break;
         case TOX_GROUP_EXIT_TYPE_TIMEOUT:
-        dbg(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_TIMEOUT", peer_id, group_number, exit_type);
+        dbg(LOGLEVEL_DEBUG, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_TIMEOUT", peer_id, group_number, exit_type);
             break;
         case TOX_GROUP_EXIT_TYPE_DISCONNECTED:
-        dbg(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_DISCONNECTED", peer_id, group_number, exit_type);
+        dbg(LOGLEVEL_DEBUG, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_DISCONNECTED", peer_id, group_number, exit_type);
             break;
         case TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED:
-        dbg(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED", peer_id, group_number, exit_type);
+        dbg(LOGLEVEL_DEBUG, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED", peer_id, group_number, exit_type);
             break;
         case TOX_GROUP_EXIT_TYPE_KICK:
-        dbg(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_KICK", peer_id, group_number, exit_type);
+        dbg(LOGLEVEL_DEBUG, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_KICK", peer_id, group_number, exit_type);
             break;
         case TOX_GROUP_EXIT_TYPE_SYNC_ERROR:
-        dbg(2, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_SYNC_ERROR", peer_id, group_number, exit_type);
+        dbg(LOGLEVEL_DEBUG, "Peer %d left group %d reason: %d TOX_GROUP_EXIT_TYPE_SYNC_ERROR", peer_id, group_number, exit_type);
             break;
     }
     updateToxSavedata(tox);
@@ -2019,13 +2028,13 @@ static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id
 
 static void group_self_join_cb(Tox *tox, uint32_t group_number, void *UNUSED(user_data))
 {
-    dbg(2, "You joined group %d", group_number);
+    dbg(LOGLEVEL_DEBUG, "You joined group %d", group_number);
     updateToxSavedata(tox);
 }
 
 static void group_join_fail_cb(Tox *tox, uint32_t group_number, Tox_Group_Join_Fail fail_type, void *UNUSED(user_data))
 {
-    dbg(2, "Joining group %d failed. reason: %d", group_number, fail_type);
+    dbg(LOGLEVEL_WARN, "Joining group %d failed. reason: %d", group_number, fail_type);
     updateToxSavedata(tox);
 }
 
@@ -2092,7 +2101,7 @@ int main(int argc, char *argv[])
     // ---- test ASAN ----
 
     fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
-    dbg(2, "ToxProxy version: %s", global_version_string);
+    dbg(LOGLEVEL_INFO, "ToxProxy version: %s", global_version_string);
 
 #ifdef __MINGW32__
     mkdir(save_dir);
@@ -2197,7 +2206,10 @@ int main(int argc, char *argv[])
     // HINT: delete any entries with other toxid in the database -----------
     Self *p2 = orma_deleteFromSelf(o->db);
     int64_t deleted_rows = p2->toxidNotEq(p2, csc(toxid_hbuf, tox_address_hex_size_without_null_termin))->execute(p2);
-    dbg(LOGLEVEL_DEBUG, "deleted old toxid count: %lld", (long long)deleted_rows);
+    if (deleted_rows > 0)
+    {
+        dbg(LOGLEVEL_WARN, "deleted old toxid count: %lld", (long long)deleted_rows);
+    }
     // HINT: delete any entries with other toxid in the database -----------
 
     {
@@ -2215,14 +2227,14 @@ int main(int argc, char *argv[])
         }
         else
         {
-            dbg(LOGLEVEL_DEBUG, "inserted toxid: %lld", (long long)inserted_id);
+            dbg(LOGLEVEL_INFO, "inserted toxid: %lld", (long long)inserted_id);
         }
         orma_free_Self(p);
         }
     }
     else
     {
-        dbg(LOGLEVEL_DEBUG, "updated toxid: %lld", (long long)affected_rows3);
+        dbg(LOGLEVEL_INFO, "updated toxid: %lld", (long long)affected_rows3);
     }
     }
 
@@ -2251,14 +2263,14 @@ int main(int argc, char *argv[])
 
     if (pthread_create(&notification_thread, NULL, notification_thread_func, (void *)NULL) != 0)
     {
-        dbg(0, "Notification Thread create failed");
+        dbg(LOGLEVEL_ERROR, "Notification Thread create failed");
     }
     else
     {
 #ifndef __APPLE__
         pthread_setname_np(notification_thread, "t_notif");
 #endif
-        dbg(2, "Notification Thread successfully created");
+        dbg(LOGLEVEL_INFO, "Notification Thread successfully created");
     }
 #endif
 
@@ -2271,18 +2283,25 @@ int main(int argc, char *argv[])
     const char *status_message = "Proxy for your messages";
     tox_self_set_status_message(tox, (uint8_t *) status_message, strlen(status_message), NULL);
 
+    dbg(LOGLEVEL_INFO, "Tox bootstrapping ...");
     bootstrap(tox);
 
-    size_t friends = tox_self_get_friend_list_size(tox);
-    dbg(9, "ToxProxy startup completed");
-    dbg(9, "My Tox ID = %s", toxid_hbuf);
-    dbg(9, "Number of friends = %ld", (long) friends);
+    dbg(LOGLEVEL_INFO, "ToxProxy startup completed");
+    dbg(LOGLEVEL_INFO, "My Tox ID = %s", toxid_hbuf);
+
+    size_t num_friends = tox_self_get_friend_list_size(tox);
+    dbg(LOGLEVEL_INFO, "num_friends=%d", (int)num_friends);
+    size_t num_conferences = tox_conference_get_chatlist_size(tox);
+    dbg(LOGLEVEL_INFO, "num_conferences=%d", (int)num_conferences);
+    size_t num_groups = tox_group_get_number_groups(tox);
+    dbg(LOGLEVEL_INFO, "num_groups=%d", (int)num_groups);
+
 
     tox_callback_friend_request(tox, friend_request_cb);
     tox_callback_friend_message(tox, friend_message_cb);
 
 #ifdef TOX_HAVE_TOXUTIL
-    dbg(9, "using toxutil");
+    dbg(LOGLEVEL_INFO, "using toxutil");
     tox_utils_callback_self_connection_status(tox, self_connection_status_cb);
     tox_callback_self_connection_status(tox, tox_utils_self_connection_status_cb);
     tox_utils_callback_friend_connection_status(tox, friendlist_onConnectionChange);
@@ -2304,7 +2323,7 @@ int main(int argc, char *argv[])
     tox_callback_conference_message(tox, conference_message_cb);
     tox_callback_conference_peer_list_changed(tox, conference_peer_list_changed_cb);
 #else
-    dbg(9, "NOT using toxutil");
+    dbg(LOGLEVEL_ERROR, "NOT using toxutil");
     tox_callback_self_connection_status(tox, self_connection_status_cb);
     tox_callback_friend_connection_status(tox, friendlist_onConnectionChange);
 #endif
@@ -2348,7 +2367,7 @@ int main(int argc, char *argv[])
 
 
         if (tox_self_get_connection_status(tox) && off) {
-            dbg(2, "Tox online, took %llu seconds", time(NULL) - cur_time);
+            dbg(LOGLEVEL_INFO, "Tox online, took %llu seconds", time(NULL) - cur_time);
 
             fprintf(stdout, "#############################################################\n");
             fprintf(stdout, "#############################################################\n");
@@ -2370,11 +2389,11 @@ int main(int argc, char *argv[])
 
             loop_counter = 0;
             // if not yet online, bootstrap every 20 seconds
-            dbg(2, "Tox NOT online yet, bootstrapping again");
+            dbg(LOGLEVEL_WARN, "Tox NOT online yet, (startup) bootstrapping again ...");
             bootstrap(tox);
 
             if (try >= max_tries) {
-                    dbg(1, "Tox NOT online for a long time, breaking bootstrap loop and starting iteration anyway.");
+                    dbg(LOGLEVEL_WARN, "Tox NOT online for a long time, breaking bootstrap loop and starting iteration anyway.");
 
                     fprintf(stdout, "#############################################################\n");
                     fprintf(stdout, "#############################################################\n");
@@ -2396,14 +2415,6 @@ int main(int argc, char *argv[])
 #ifndef __APPLE__
     pthread_setname_np(pthread_self(), "t_main");
 #endif
-    size_t num_friends = tox_self_get_friend_list_size(tox);
-    dbg(2, "num_friends=%d", (int)num_friends);
-
-    size_t num_conferences = tox_conference_get_chatlist_size(tox);
-    dbg(2, "num_conferences=%d", (int)num_conferences);
-
-    size_t num_groups = tox_group_get_number_groups(tox);
-    dbg(2, "num_groups=%d", (int)num_groups);
 
     int i = 0;
 
@@ -2449,7 +2460,7 @@ int main(int argc, char *argv[])
         if (am_i_online == 0) {
             if ((my_last_online_ts + (BOOTSTRAP_AFTER_OFFLINE_SECS * 1000)) < (uint32_t)get_unix_time()) {
                 // then bootstap again
-                dbg(2, "Tox NOT online, bootstrapping again");
+                dbg(LOGLEVEL_INFO, "Tox NOT online, bootstrapping again ...");
                 bootstrap(tox);
                 // reset timestamp, that we do not bootstrap on every tox_iterate() loop
                 my_last_online_ts = (uint32_t)get_unix_time();
