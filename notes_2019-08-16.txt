@@ -1,5 +1,0 @@
-/home/kaefert/Development/github/qTox_zoff_2019/inst_ct/include
-/home/kaefert/Development/tox_build/install/include
-/home/kaefert/Development/tox_build/install/lib64
-
--std=c99 -I/home/kaefert/Development/tox_build/install/include -O0 -g3 -Wall -c -fmessage-length=0
