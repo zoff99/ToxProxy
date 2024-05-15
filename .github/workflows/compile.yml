@@ -27,7 +27,11 @@ jobs:
 
       - name: compile
         run:  |
-          ./dockcross-linux-arm64 bash -c 'cd src/ ; make -j4'
+          ./dockcross-linux-arm64 bash -c 'git clone https://github.com/jedisct1/libsodium;cd libsodium; git checkout 1.0.19; autogen.sh; configure; make -j30'
+
+      #- name: compile
+      #  run:  |
+      #    ./dockcross-linux-arm64 bash -c 'cd src/ ; make -j4'
 
   test_linux:
     runs-on: ubuntu-22.04
