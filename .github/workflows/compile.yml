@@ -35,7 +35,7 @@ jobs:
 
       - name: compile
         run:  |
-          ./dockcross-linux-arm64 bash -c 'pushd . ; git clone https://github.com/jedisct1/libsodium;cd libsodium/; git checkout 1.0.19; ./autogen.sh; ./configure --host="$CROSS_TRIPLE" --disable-shared --enable-static --with-pic; make -j30 && make install && popd && cd src/ && cd ./sql_tables/gen/; make csorma.a && make toxcore_amalgamation.a && make sqlite3.a '
+          ./dockcross-linux-arm64 bash -c 'pushd . ; git clone https://github.com/jedisct1/libsodium;cd libsodium/; git checkout 1.0.19; ./autogen.sh; ./configure --host="$CROSS_TRIPLE" --disable-shared --enable-static --with-pic; make -j30 && make install && popd && cd src/ && cd ./sql_tables/gen/; make csorma.a && cd ../../ && make toxcore_amalgamation.a && make sqlite3.a '
 
       #- name: compile
       #  run:  |
