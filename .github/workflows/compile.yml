@@ -29,12 +29,13 @@ jobs:
         run:  |
           pwd
           cd src/
-          cd csorma/;javac csorma_generator.java
-          cd csorma/;java csorma_generator ../sql_tables/
+          cd csorma/
+          javac csorma_generator.java
+          java csorma_generator ../sql_tables/
 
       - name: compile
         run:  |
-          ./dockcross-linux-arm64 bash -c 'git clone https://github.com/jedisct1/libsodium;cd libsodium/; git checkout 1.0.19; ./autogen.sh; ./configure --host="$CROSS_TRIPLE" --disable-shared --enable-static --with-pic; make -j30 && make install &&    cd ./sql_tables/gen/; make csorma.a && make toxcore_amalgamation.a && make sqlite3.a '
+          ./dockcross-linux-arm64 bash -c 'git clone https://github.com/jedisct1/libsodium;cd libsodium/; git checkout 1.0.19; ./autogen.sh; ./configure --host="$CROSS_TRIPLE" --disable-shared --enable-static --with-pic; make -j30 && make install && cd &&  cd ./sql_tables/gen/; make csorma.a && make toxcore_amalgamation.a && make sqlite3.a '
 
       #- name: compile
       #  run:  |
