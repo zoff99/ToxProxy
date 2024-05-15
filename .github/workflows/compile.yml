@@ -6,6 +6,29 @@ on:
 
 jobs:
 
+  test_raspi:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: make script dockcross-linux-arm64
+        run: docker run --rm dockcross/linux-arm64 > ./dockcross-linux-arm64; chmod +x ./dockcross-linux-arm64
+
+      - name: test
+        run: ./dockcross-linux-arm64 bash -c 'ls -al;id;pwd;hostname;uname -a'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: java-version
+        run: java -version
+
+      - name: compile
+        run:  |
+          ./dockcross-linux-arm64 bash -c 'cd src/ ; make -j4'
+
   test_linux:
     runs-on: ubuntu-22.04
     steps:
