@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 
 SODIUM_VERSION="1.0.19"
