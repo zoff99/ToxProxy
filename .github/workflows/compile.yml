@@ -27,7 +27,7 @@ jobs:
 
       - name: compile
         run:  |
-          ./dockcross-linux-arm64 bash -c 'git clone https://github.com/jedisct1/libsodium;cd libsodium/; git checkout 1.0.19; ./autogen.sh; ./configure --host="$CROSS_TRIPLE" --disable-shared --with-pic; make -j30;make install'
+          ./dockcross-linux-arm64 bash -c 'git clone https://github.com/jedisct1/libsodium;cd libsodium/; git checkout 1.0.19; ./autogen.sh; ./configure --host="$CROSS_TRIPLE" --disable-shared --enable-static --with-pic; make -j30;make install'
 
       #- name: compile
       #  run:  |
