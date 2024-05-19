@@ -30,6 +30,14 @@ int main()
             (uint8_t*)db_filename, strlen(db_filename));
     // ----------- initialize DB -----------
 
+#ifdef ENCRYPT_CSORMA
+    printf("TEST: csorma was compiled with sqlcipher encryption\n");
+#endif
+
+    const char *key = "secret007$%";
+    int r = OrmaDatabase_key(o, (uint8_t*)key, strlen(key));
+    printf("TEST: setting sqlcipher key. result = %d\n", r);
+
     // ----------- freehand SQL to create TABLE -----------
     char *sql1 = "CREATE TABLE IF NOT EXISTS \"Message\" ("
   "\"id\" INTEGER,"

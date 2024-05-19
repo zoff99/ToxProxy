@@ -44,6 +44,7 @@ const char *csorma_get_sqlite_version();
 
 OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t directory_name_len, 
                                 const uint8_t *file_name, const uint32_t file_name_len);
+int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len);
 
 void OrmaDatabase_shutdown(OrmaDatabase *o);
 

@@ -24,7 +24,7 @@ pthread_t thr_2;
 int thr_1_stop = 0;
 int thr_2_stop = 0;
 OrmaDatabase *o = NULL;
-char *utf8_test_file_broken1 = "invalid_UTF-8-test.txt";
+char *utf8_test_file_broken1 = "invalid_UTF-8-test.dat";
 char *utf8_test_file2 = "UTF-8-demo.html";
 uint64_t counter1 = 0;
 uint64_t counter2 = 0;
@@ -151,6 +151,14 @@ int main()
             (uint8_t*)db_filename, strlen(db_filename));
     printf("TEST: database handle: %p\n", (void *)o);
     // ----------- initialize DB -----------
+
+#ifdef ENCRYPT_CSORMA
+    printf("TEST: csorma was compiled with sqlcipher encryption\n");
+#endif
+
+    const char *key = "passphrase123!";
+    int r = OrmaDatabase_key(o, (uint8_t*)key, strlen(key));
+    printf("TEST: setting sqlcipher key. result = %d\n", r);
 
     // ----------- freehand SQL -----------
     char *sql1 = "CREATE TABLE IF NOT EXISTS \"Message\" ("

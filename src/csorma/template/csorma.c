@@ -1,5 +1,9 @@
 
+#ifdef ENCRYPT_CSORMA
+#include "sqlcipher/sqlite3.h"
+#else
 #include "sqlite/sqlite3.h"
+#endif
 #include "csorma.h"
 #include "logger.h"
 
@@ -58,8 +62,11 @@ csorma_s *csorma_str_build(const char *b1, const uint32_t b1_len)
     }
     CSORMA_LOGGER_DEBUG("002:%d %p", b1_len, b1);
     memcpy(out->s, b1, b1_len);
+    // HINT: set the length (this is without NULL terminator)
     out->l = b1_len;
+    // HINT: set the new "current" end position
     out->cur = out->s + b1_len;
+    // HINT: we have a NULL terminator at the end of the new string
     out->n = 1;
     return out;
 }
@@ -86,7 +93,11 @@ csorma_s *csorma_str_con_space(csorma_s *out)
 
 csorma_s *csorma_str_int32t(csorma_s *out, const int32_t append_i)
 {
-    const int max_int32_char_len = 20;
+    // HINT: INT32_MAX = 2147483647
+    //       INT32_MIN = (-2147483647 - 1)
+    //       so we need at least 11 chars for text representation
+    //       we use 15 just in case
+    const int max_int32_char_len = 15;
     char s[max_int32_char_len + 1];
     snprintf(s, max_int32_char_len, "%d", append_i);
     csorma_s *result = csorma_str_con(out, (const char *)s, strlen(s));
@@ -106,13 +117,18 @@ csorma_s *csorma_str_con(csorma_s *out, const char *b1, const uint32_t b1_len)
         // HINT: what to do here?? FIX ME
         CSORMA_LOGGER_ERROR("!! PANIC !!");
     }
+    // HINT: set the "current" end position
     out->cur = out->s + out->l;
     // HINT: zero out the new region of the buffer including the zero byte at the end
     memset(out->cur, 0, b1_len + 1);
     CSORMA_LOGGER_DEBUG("%d %p", b1_len, b1);
+    // HINT: add the new string `b1` at the end
     memcpy(out->cur, b1, b1_len);
+    // HINT: set the new length (this is without NULL terminator)
     out->l = out->l + b1_len;
+    // HINT: set the new "current" end position
     out->cur = out->cur + out->l;
+    // HINT: we have a NULL terminator at the end of the new string
     out->n = 1;
     return out;
 }
@@ -536,6 +552,16 @@ OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t di
     o->user_data = NULL;
 
     return o;
+}
+
+int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len)
+{
+#ifdef ENCRYPT_CSORMA
+    int result = sqlite3_key(o->db, key, key_len);
+    return result;
+#else
+    return CSORMA_GENERIC_RESULT_ERROR;
+#endif
 }
 
 void OrmaDatabase_shutdown(OrmaDatabase *o)

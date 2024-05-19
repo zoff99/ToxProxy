@@ -13,10 +13,21 @@ ifeq ($(findstring mingw, $(ccmachine)), mingw)
   CFLAGS += --static
 endif
 
-
 ASANCFLAGS = -fsanitize=address -fno-omit-frame-pointer -static-libasan
-CFLAGS += -g -O3 -fPIC -Wall -Wextra -std=c99 -pedantic -pthread -Isqlite/ -I./
+CFLAGS += -g -O3 -fPIC -Wall -Wextra -Werror=maybe-uninitialized -std=c99 -pedantic -pthread -I./
 LIBSSQLITE3 = -lm
+
+ifdef ENCRYPT_CS
+CFLAGS += -DENCRYPT_CSORMA -DSQLITE_HAS_CODEC -Isqlcipher/
+CFSQLCIPHER = -DSQLITE_HAS_CODEC -DSQLCIPHER_CRYPTO_OPENSSL -DSQLITE_TEMP_STORE=2
+LBSQLCIPHER = $(shell pkg-config --libs openssl)
+SQLITE_DIR = sqlcipher
+else
+CFLAGS += -Isqlite/
+CFSQLCIPHER =
+LBSQLCIPHER =
+SQLITE_DIR = sqlite
+endif
 
 # ------------------------------
 #  tests
@@ -33,22 +44,22 @@ asan_build:
 tests: csorma_test csorma_example
 
 csorma_stub: csorma_stub.o sqlite3.a csorma.a
-	$(CC) $(CFLAGS) csorma_stub.o csorma.a sqlite3.a $(LIBS) -o csorma_stub
+	$(CC) $(CFLAGS) csorma_stub.o csorma.a sqlite3.a $(LIBS) $(LBSQLCIPHER) -o csorma_stub
 
 csorma_test: csorma_test.o sqlite3.a csorma.a
-	$(CC) $(CFLAGS) csorma_test.o csorma.a sqlite3.a $(LIBS) -o csorma_test
+	$(CC) $(CFLAGS) csorma_test.o csorma.a sqlite3.a $(LIBS) $(LBSQLCIPHER) -o csorma_test
 
 csorma_example: csorma_example.o sqlite3.a csorma.a
-	$(CC) $(CFLAGS) csorma_example.o csorma.a sqlite3.a $(LIBS) -o csorma_example
+	$(CC) $(CFLAGS) csorma_example.o csorma.a sqlite3.a $(LIBS) $(LBSQLCIPHER) -o csorma_example
 
 csorma_stub.o: csorma_stub.c
-	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+	$(CC) -c $(CFLAGS) $(LIBS) $(LBSQLCIPHER) $< -o $@
 
 csorma_test.o: csorma_test.c
-	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+	$(CC) -c $(CFLAGS) $(LIBS) $(LBSQLCIPHER) $< -o $@
 
 csorma_example.o: csorma_example.c
-	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+	$(CC) -c $(CFLAGS) $(LIBS) $(LBSQLCIPHER) $< -o $@
 
 # ------------------------------
 #  csorma lib
@@ -60,7 +71,7 @@ sharedlib: csorma.o logger.o __@@@TABLES_O_FILES@@@__
 	$(CC) -shared -o libcsorma.so csorma.o logger.o __@@@TABLES_O_FILES@@@__
 
 csorma.o: csorma.c csorma.h
-	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
+	$(CC) -c $(CFLAGS) $(LIBS) $(LBSQLCIPHER) $< -o $@
 
 logger.o: logger.c logger.h
 	$(CC) -c $(CFLAGS) $(LIBS) $< -o $@
@@ -77,8 +88,8 @@ __@@@TABLES_COMPILE_O_FILES@@@__
 sqlite3.a: sqlite3.o
 	$(AR) rcs sqlite3.a sqlite3.o
 
-sqlite3.o: sqlite/sqlite3.c
-	$(CC) -c $(CFLAGS) $(LIBS) $(LIBSSQLITE3) $< -o $@
+sqlite3.o: $(SQLITE_DIR)/sqlite3.c
+	$(CC) -c $(CFLAGS) $(CFSQLCIPHER) $(LIBS) $(LIBSSQLITE3) $(LBSQLCIPHER) $< -o $@
 
 # ------------------------------
 #  cleanup

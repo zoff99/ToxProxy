@@ -27,9 +27,19 @@ https://github.com/zoff99/sorma2
 * NO complex DB operations like JOIN or UNION etc.
 * NO multi column primary keys
 * NO non ASCII characters in table and column names
-* table and column names MUST NOT start or end with a `_` or a number
+* table and column names MUST NOT start or end with a `_` or a `number`
 * table and column names MUST only contain `[a-z][_]` (NO uppercase)
 * if table or column name starts with (or contains) `public` or `static` there could be issues(*)
+
+### Supported architechtures
+* Linux
+* Raspi
+* Windows
+* macOS
+* macOS silicon arm64
+* s390
+* mips
+* riscV
 
 ### Usage
 #### Create your first C project with csorma
@@ -83,7 +93,7 @@ STUB: res1: 0
 STUB: all OK
 ```
 
-you now have your working project stub.<br>
+you now have your working C project stub.<br>
 
 #### Add some more SQL stuff to your new project
 
@@ -256,3 +266,4 @@ OrmaDatabase_shutdown(o);
 Any use of this project's code by GitHub Copilot, past or present, is done
 without our permission.  We do not consent to GitHub's use of this project's
 code in Copilot.
+

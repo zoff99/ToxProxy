@@ -2,7 +2,11 @@
 #ifndef C_CSORMA_CSORMA_H
 #define C_CSORMA_CSORMA_H
 
+#ifdef ENCRYPT_CSORMA
+#include "sqlcipher/sqlite3.h"
+#else
 #include "sqlite/sqlite3.h"
+#endif
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -17,11 +21,16 @@ extern "C" {
 // ----------- version -----------
 #define CSORMA_VERSION_MAJOR 0
 #define CSORMA_VERSION_MINOR 99
-#define CSORMA_VERSION_PATCH 0
-static const char csorma_global_version_string[] = "0.99.0";
-static const char csorma_global_version_asan_string[] = "0.99.0-ASAN";
+#define CSORMA_VERSION_PATCH 1
+#ifdef ENCRYPT_CSORMA
+static const char csorma_global_version_string[] = "0.99.1-SQLCIPHER";
+static const char csorma_global_version_asan_string[] = "0.99.1-SQLCIPHER-ASAN";
+#else
+static const char csorma_global_version_string[] = "0.99.1";
+static const char csorma_global_version_asan_string[] = "0.99.1-ASAN";
+#endif
 
-#define CSORMA__GIT_COMMIT_HASH "00000007"
+#define CSORMA__GIT_COMMIT_HASH "00000108"
 // ----------- version -----------
 // ----------- version -----------
 
@@ -123,6 +132,7 @@ void add_to_orderby_asc_sql(csorma_s *sql_orderby, const char *column_name, cons
 
 OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t directory_name_len, 
                                 const uint8_t *file_name, const uint32_t file_name_len);
+int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len);
 
 void OrmaDatabase_lock_lastrowid_mutex();
 void OrmaDatabase_unlock_lastrowid_mutex();

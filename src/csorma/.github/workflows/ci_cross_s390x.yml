@@ -1,0 +1,58 @@
+name: s390x build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+
+  build-s390x:
+    name: s390x Build
+    runs-on: ubuntu-22.04
+    if: |
+      true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: java-version
+        run: java -version
+
+      - name: generate code
+        run: |
+          javac csorma_generator.java && java csorma_generator ./project/
+
+      - name: install deps
+        run: |
+          sudo apt-get update && \
+          sudo DEBIAN_FRONTEND=noninteractive \
+          apt-get install -y --no-install-recommends \
+          ca-certificates qemu-system-s390x qemu-user-static \
+          qemu-utils binfmt-support libc6-s390x-cross libatomic1-s390x-cross
+
+      - name: enable s390x emu
+        run: |
+          sudo modprobe binfmt_misc || echo "NO ERR"
+          sudo update-binfmts --enable || echo "NO ERR"
+
+      - name: check binfmt_misc
+        run: |
+          lsmod | grep binfmt_misc || echo "NO ERR"
+          ls -al /proc/sys/fs/binfmt_misc/ || echo "NO ERR"
+
+      - name: make script dockcross/linux-s390x
+        run: docker run --rm dockcross/linux-s390x > ./dockcross-linux-s390x; chmod +x ./dockcross-linux-s390x
+
+      - name: test
+        run: ./dockcross-linux-s390x bash -c 'ls -al;id;pwd;hostname;uname -a'
+
+      - name: build deps
+        run: |
+          ./dockcross-linux-s390x bash -c 'cd project/gen/;ls -al;make -j 6 all && make tests;ldd csorma_test||echo "NO ERR";ls -hal csorma_test;./csorma_test'
+

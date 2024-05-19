@@ -10,7 +10,7 @@ jobs:
   test_linux_big:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
         with:
@@ -25,10 +25,56 @@ jobs:
           cd tests/
           time ./t.sh
 
+
+  test_linux_sqlcipher:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: java-version
+        run: java -version
+
+      - name: generate code
+        run: |
+          javac csorma_generator.java  && java csorma_generator ./project/
+
+      - name: compile binary
+        run: |
+          cd project/gen/
+          ls -al
+          ENCRYPT_CS=1 make -j 6 asan_all && ENCRYPT_CS=1 make asan_tests
+
+      - name: check binary
+        run: |
+          cd project/gen/
+          ls -al
+          ldd csorma_test
+          ls -al csorma_test
+          ls -hal csorma_test
+
+      - name: debug
+        run: |
+          cd project/gen/
+          echo "==============="
+          cat -n Message.h
+          echo "==============="
+          cat -n Message.c
+          echo "==============="
+
+      - name: run test
+        run: |
+          cd project/gen/
+          ./csorma_test
+
   test_linux:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
         with:
@@ -73,7 +119,7 @@ jobs:
   test_macos:
     runs-on: macos-12
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: install deps
         run:  brew install gdb
@@ -124,7 +170,7 @@ jobs:
   test_macos14arm:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
         with:
@@ -172,7 +218,7 @@ jobs:
   test_wine:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: install dependencies
         run: |
