@@ -623,6 +623,18 @@ const char *csorma_get_version()
 #endif
 }
 
+const char *csorma_get_sqlcipher_version()
+{
+#ifdef ENCRYPT_CSORMA
+    // TODO: have not found a way to get the version per function call. without crash or using `free` somewhere.
+    //       so this is now updated by hand.
+    return "4.6.0";
+#else
+    return "0.0.0";
+#endif
+}
+
+
 static int rs_find_column_idx(sqlite3_stmt *res, const char *column_name)
 {
     int result_colum_count = sqlite3_column_count(res);

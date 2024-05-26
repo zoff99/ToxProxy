@@ -41,6 +41,7 @@ void csorma_str_free(csorma_s *s);
 
 const char *csorma_get_version();
 const char *csorma_get_sqlite_version();
+const char *csorma_get_sqlcipher_version();
 
 OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t directory_name_len, 
                                 const uint8_t *file_name, const uint32_t file_name_len);

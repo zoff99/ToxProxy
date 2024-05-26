@@ -21,6 +21,7 @@ int main()
 {
     printf("TEST: CSORMA version: %s\n", csorma_get_version());
     printf("TEST: CSORMA SQLite version: %s\n", csorma_get_sqlite_version());
+    printf("TEST: CSORMA sqlcipher version: %s\n", csorma_get_sqlcipher_version());
 
     // ----------- initialize DB -----------
     const char *db_dir = "./";

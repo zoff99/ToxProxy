@@ -20,6 +20,7 @@ https://github.com/zoff99/sorma2
 * easy to use (for most common SQL operations)
 * no dependencies (other than SQLite3 amalagamtion soure file)
 * works with ASAN
+* <b>sqlcipher</b> encryption option (you need to have openssl and libssl and libcrypto installed)
 
 ### What is does NOT do
 * NOT optimized for speed
@@ -29,7 +30,9 @@ https://github.com/zoff99/sorma2
 * NO non ASCII characters in table and column names
 * table and column names MUST NOT start or end with a `_` or a `number`
 * table and column names MUST only contain `[a-z][_]` (NO uppercase)
-* if table or column name starts with (or contains) `public` or `static` there could be issues(*)
+* if table or column name starts with (or contains) `public` or `static` there could be issues<sup>*</sup>
+
+<sup>*</sup><sup><sub><I>try to avoid SQL reserved words in table and column names, there may also be some other naming conflicts.</I></sub></sup>
 
 ### Supported architechtures
 * Linux
@@ -80,6 +83,12 @@ cd ./mysuperstuff/gen/
 now build your C project stub and run it:
 ```bash
 make csorma_stub
+./csorma_stub
+```
+
+if you want to build your project with <b>sqlcipher</b> (you need to have openssl and libssl and libcrypto installed):
+```bash
+ENCRYPT_CS=1 make csorma_stub
 ./csorma_stub
 ```
 
@@ -261,6 +270,10 @@ shutdown the database:
 ```C
 OrmaDatabase_shutdown(o);
 ```
+
+### sqlcipher source code
+sqlcipher source code is generated from latest [sqlcipher git repository](https://github.com/sqlcipher/sqlcipher) using this [tool](https://github.com/zoff99/gen_sqlcipher_amalgamation)<br>
+you can download the generated sqlcipher code from https://github.com/zoff99/gen_sqlcipher_amalgamation/releases/tag/nightly
 
 <br>
 Any use of this project's code by GitHub Copilot, past or present, is done

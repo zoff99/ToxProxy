@@ -13,7 +13,7 @@ import java.util.stream.Stream;
 
 public class csorma_generator {
     private static final String TAG = "Generator";
-    static final String Version = "0.99.1";
+    static final String Version = "0.99.2";
     static final String out_dir = "gen/";
     static final String prefix = "_csorma_";
     static final String in_suffix = ".java";
