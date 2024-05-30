@@ -323,7 +323,7 @@ int main()
     float delta_t = ((ts2 - ts1) / 1000);
     if (delta_t > 0)
     {
-        printf("inserts/sec = %0.2f\n", ((float)(counter1 + counter2) / delta_t));
+        printf("inserts/sec = %0.2f\n", (double)((double)(counter1 + counter2) / (double)delta_t));
     }
 #endif
 

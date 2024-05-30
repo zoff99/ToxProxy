@@ -2,7 +2,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -269,6 +271,129 @@ char *sql2 = "CREATE TABLE IF NOT EXISTS \"Friendlist\" ("
     // ----------- count(*) SQL -----------
 
 
+
+    // ----------- insert utf-8 and just binary -----------
+    printf("===================================\n");
+    printf("TEST: broken 001 (insert just bytes)\n");
+    {
+    int len_broken = 20;
+    char *broken = (char *)calloc(1, len_broken);
+    char *ptr = broken;
+    *ptr = (char)120; ptr++;
+    *ptr = (char)10; ptr++;
+    *ptr = (char)65; ptr++;
+    *ptr = (char)66; ptr++;
+    *ptr = (char)3; ptr++;
+    *ptr = (char)6; ptr++;
+    *ptr = (char)170; ptr++;
+
+    *ptr = (char)0xF0; ptr++;
+    *ptr = (char)0x80; ptr++;
+    *ptr = (char)0x82; ptr++;
+    *ptr = (char)0x80; ptr++;
+
+    *ptr = (char)0; ptr++;
+    *ptr = (char)65; ptr++;
+    *ptr = (char)65; ptr++;
+    *ptr = (char)65; ptr++;
+    csorma_s *str2 = csc(broken, len_broken);
+
+    printf("TEST: str2 text=\"%s\"\n", str2->s);
+    printf("TEST: str2 text bytes=\"%d\"\n", str2->l);
+    printf("TEST: str2 text null term=\"%d\"\n", str2->n);
+
+    free(broken);
+    Message *m = orma_new_Message(o->db);
+    m->tox_friendpubkey = csb("test_broken_001");
+    m->text = str2;
+    m->message_id = 123000010;
+    int64_t UNUSED(rowid) = orma_insertIntoMessage(m);
+    orma_free_Message(m);
+    }
+    // ----------- insert utf-8 and just binary -----------
+    // ----------- select utf-8 and just binary -----------
+    {
+    Message *mx1 = orma_selectFromMessage(o->db);
+    MessageList *ml6 = mx1
+                        ->message_idEq(mx1, 123000010)
+                        ->toList(mx1);
+    printf("TEST: ml7->items=%ld\n", ml6->items);
+    Message **md6 = ml6->l;
+    for(int i=0;i<ml6->items;i++)
+    {
+        printf("TEST: id=%ld\n", (*md6)->id);
+        printf("TEST: mid=%ld\n", (*md6)->message_id);
+        printf("TEST: pk=\"%s\"\n", (*md6)->tox_friendpubkey->s);
+        printf("TEST: text=\"%s\"\n", (*md6)->text->s);
+        printf("TEST: text bytes=\"%d\"\n", (*md6)->text->l);
+        printf("TEST: text null term=\"%d\"\n", (*md6)->text->n);
+        md6++;
+    }
+    orma_free_MessageList(ml6);
+    }
+    printf("===================================\n");
+    // ----------- select utf-8 and just binary -----------
+
+
+    // ----------- insert large buffer with random bytes -----------
+    printf("===================================\n");
+    printf("TEST: broken 002 (large buffer with random bytes)\n");
+    const int ll = 300000;
+    unsigned char buffer[ll];
+    {
+    int i;
+    srand(time(NULL));
+    for (i = 0; i < ll; i++) {
+        unsigned char c = rand() % 256;
+        if (c == 0) { c = 1; }
+        buffer[i] = c;
+    }
+
+    csorma_s *str2 = csc((const char *)buffer, ll);
+
+    Message *m = orma_new_Message(o->db);
+    m->tox_friendpubkey = csb("test_broken_002");
+    m->text = str2;
+    m->message_id = 123000020;
+    int64_t UNUSED(rowid) = orma_insertIntoMessage(m);
+    orma_free_Message(m);
+    }
+
+    {
+    Message *mx1 = orma_selectFromMessage(o->db);
+    MessageList *ml6 = mx1
+                        ->message_idEq(mx1, 123000020)
+                        ->toList(mx1);
+    printf("TEST: ml7->items=%ld\n", ml6->items);
+    Message **md6 = ml6->l;
+    for(int i=0;i<ml6->items;i++)
+    {
+        printf("TEST: id=%ld\n", (*md6)->id);
+        printf("TEST: mid=%ld\n", (*md6)->message_id);
+        printf("TEST: pk=\"%s\"\n", (*md6)->tox_friendpubkey->s);
+        // printf("TEST: text=\"%s\"\n", (*md6)->text->s);
+
+        if (ll != (*md6)->text->l)
+        {
+            printf("TEST: ERR-111: len differs %d != %d\n", ll, (*md6)->text->l);
+            exit(-111);
+        }
+        for (i = 0; i < ll; i++) {
+            if ((uint8_t)buffer[i] != (uint8_t)(*md6)->text->s[i]) {
+                printf("TEST: ERR-112: text diff at position %d\n", i);
+                exit(-112);
+            }
+        }
+        printf("TEST: bytes inserted is equal to bytes selected\n");
+
+        printf("TEST: text bytes=\"%d\"\n", (*md6)->text->l);
+        printf("TEST: text null term=\"%d\"\n", (*md6)->text->n);
+        md6++;
+    }
+    orma_free_MessageList(ml6);
+    }
+    printf("===================================\n");
+    // ----------- insert large buffer with random bytes -----------
 
 
 

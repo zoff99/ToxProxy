@@ -14,7 +14,7 @@ ifeq ($(findstring mingw, $(ccmachine)), mingw)
 endif
 
 ASANCFLAGS = -fsanitize=address -fno-omit-frame-pointer -static-libasan
-CFLAGS += -g -O3 -fPIC -Wall -Wextra -Werror=maybe-uninitialized -std=c99 -pedantic -pthread -I./
+CFLAGS += -g -O3 -fPIC -Wall -Wextra -Werror=maybe-uninitialized -Wdouble-promotion -Wno-unknown-warning-option -std=c99 -pedantic -pthread -I./
 LIBSSQLITE3 = -lm
 
 ifdef ENCRYPT_CS
@@ -89,7 +89,7 @@ sqlite3.a: sqlite3.o
 	$(AR) rcs sqlite3.a sqlite3.o
 
 sqlite3.o: $(SQLITE_DIR)/sqlite3.c
-	$(CC) -c $(CFLAGS) $(CFSQLCIPHER) $(LIBS) $(LIBSSQLITE3) $(LBSQLCIPHER) $< -o $@
+	$(CC) -c $(CFLAGS) $(CFSQLCIPHER) -Wno-unused-parameter -Wno-implicit-fallthrough -Wno-pointer-arith -Wno-unused-variable -Wno-sign-compare -Wno-double-promotion $(LIBS) $(LIBSSQLITE3) $(LBSQLCIPHER) $< -o $@
 
 # ------------------------------
 #  cleanup

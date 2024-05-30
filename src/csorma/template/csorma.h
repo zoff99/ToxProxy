@@ -95,9 +95,9 @@ typedef struct OrmaBindvars {
     OrmaBindvar* b;
 } OrmaBindvars;
 
-const char *csorma_get_version();
-const char *csorma_get_sqlite_version();
-const char *csorma_get_sqlcipher_version();
+const char *csorma_get_version(void);
+const char *csorma_get_sqlite_version(void);
+const char *csorma_get_sqlcipher_version(void);
 
 csorma_s *csorma_str2_build(const char *b1);
 csorma_s *csorma_str_build(const char *b1, const uint32_t b1_len);
@@ -135,8 +135,8 @@ OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t di
                                 const uint8_t *file_name, const uint32_t file_name_len);
 int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len);
 
-void OrmaDatabase_lock_lastrowid_mutex();
-void OrmaDatabase_unlock_lastrowid_mutex();
+void OrmaDatabase_lock_lastrowid_mutex(void);
+void OrmaDatabase_unlock_lastrowid_mutex(void);
 
 void OrmaDatabase_shutdown(OrmaDatabase *o);
 

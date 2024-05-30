@@ -501,14 +501,14 @@ static uint8_t* str_buf_concat(const uint8_t *b1, const uint32_t b1_len, const u
     return out;
 }
 
-void OrmaDatabase_lock_lastrowid_mutex()
+void OrmaDatabase_lock_lastrowid_mutex(void)
 {
     CSORMA_LOGGER_DEBUG("trying to lock lastrowid mutex");
     pthread_mutex_lock(&__sorma_global_last_inserted_rowid___mutex);
     CSORMA_LOGGER_DEBUG("mutex lastrowid locked");
 }
 
-void OrmaDatabase_unlock_lastrowid_mutex()
+void OrmaDatabase_unlock_lastrowid_mutex(void)
 {
     CSORMA_LOGGER_DEBUG("trying to UN-lock lastrowid mutex");
     pthread_mutex_unlock(&__sorma_global_last_inserted_rowid___mutex);
@@ -560,6 +560,10 @@ int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len
     int result = sqlite3_key(o->db, key, key_len);
     return result;
 #else
+    // HINT: to get rid of unused var warning
+    (void)o;
+    (void)key;
+    (void)key_len;
     return CSORMA_GENERIC_RESULT_ERROR;
 #endif
 }
@@ -609,12 +613,12 @@ CSORMA_GENERIC_RESULT OrmaDatabase_run_multi_sql(const OrmaDatabase *o, const ui
     return CSORMA_GENERIC_RESULT_ERROR;
 }
 
-const char *csorma_get_sqlite_version()
+const char *csorma_get_sqlite_version(void)
 {
     return sqlite3_libversion();
 }
 
-const char *csorma_get_version()
+const char *csorma_get_version(void)
 {
 #if defined(__SANITIZE_ADDRESS__)
     return csorma_global_version_asan_string;
@@ -623,7 +627,7 @@ const char *csorma_get_version()
 #endif
 }
 
-const char *csorma_get_sqlcipher_version()
+const char *csorma_get_sqlcipher_version(void)
 {
 #ifdef ENCRYPT_CSORMA
     // TODO: have not found a way to get the version per function call. without crash or using `free` somewhere.
