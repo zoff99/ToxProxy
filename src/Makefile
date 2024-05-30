@@ -22,7 +22,7 @@ LIBS = $(shell pkg-config --cflags --libs libsodium libcurl) -pthread
 TP_CFLAGS = -Wall -Wextra -std=c99 -pedantic
 # -Wno-unused-parameter
 LIBSSQLITE3 = -lm
-CFLAGSSQLITE3 += -g -O3 -fPIC -I./ -Wall -Wextra -Werror=maybe-uninitialized -std=c99 -pedantic -pthread
+CFLAGSSQLITE3 += -g -O3 -fPIC -I./ -Wall -Wextra -Werror=maybe-uninitialized -Wdouble-promotion -Wno-unknown-warning-option -std=c99 -pedantic -pthread
 
 ToxProxy: ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a sqlite3.a
 	$(CC) $(CFLAGS) $(TP_CFLAGS) ToxProxy.c toxcore_amalgamation.a sql_tables/gen/csorma.a sqlite3.a $(LIBS) $(MINGWLIBS) -o ToxProxy
@@ -31,7 +31,7 @@ sqlite3.a: sqlite3.o
 	$(AR) rcs sqlite3.a sqlite3.o
 
 sqlite3.o: csorma/sqlite/sqlite3.c
-	$(CC) -c $(CFLAGSSQLITE3) $(LIBSSQLITE3) $< -o $@
+	$(CC) -c $(CFLAGSSQLITE3) $(LIBSSQLITE3) -Wno-unused-parameter -Wno-implicit-fallthrough -Wno-pointer-arith -Wno-unused-variable -Wno-sign-compare -Wno-double-promotion $< -o $@
 
 sql_tables/gen/csorma.a: sql_tables/*.java
 	cd csorma/;javac csorma_generator.java
