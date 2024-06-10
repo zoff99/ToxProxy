@@ -2178,6 +2178,7 @@ int main(int argc, char *argv[])
     fprintf(stdout, "ToxProxy version: %s\n", global_version_string);
     dbg(LOGLEVEL_INFO, "ToxProxy version: %s", global_version_string);
     dbg(LOGLEVEL_INFO, "libsodium version: %s", sodium_version_string());
+    dbg(LOGLEVEL_INFO, "toxcore version: v%d.%d.%d", (int)tox_version_major(), (int)tox_version_minor(), (int)tox_version_patch());
 
 #ifdef __MINGW32__
     mkdir(save_dir);
