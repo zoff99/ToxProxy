@@ -20,6 +20,8 @@ https://github.com/zoff99/sorma2
 * easy to use (for most common SQL operations)
 * no dependencies (other than SQLite3 amalagamtion soure file)
 * works with ASAN
+* works with TSAN
+* works with UBSAN
 * <b>sqlcipher</b> encryption option (you need to have openssl and libssl and libcrypto installed)
 
 ### What is does NOT do
@@ -69,7 +71,7 @@ public class Person
 }
 ```
 
-now create the sources with the generator. you need at least java 17.<br>
+now create the sources with the generator. <b>you need at least java 17</b>.<br>
 ```bash
 javac csorma_generator.java && java csorma_generator ./mysuperstuff/
 ```
