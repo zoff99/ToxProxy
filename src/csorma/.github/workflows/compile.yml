@@ -71,7 +71,7 @@ jobs:
           cd project/gen/
           ./csorma_test
 
-  test_linux:
+  test_linux_asan:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -88,11 +88,101 @@ jobs:
         run: |
           javac csorma_generator.java  && java csorma_generator ./project/
 
-      - name: compile binary
+      - name: compile binary with ASAN
         run: |
           cd project/gen/
           ls -al
           make -j 6 asan_all && make asan_tests
+
+      - name: check binary
+        run: |
+          cd project/gen/
+          ls -al
+          ldd csorma_test
+          ls -al csorma_test
+          ls -hal csorma_test
+
+      - name: debug
+        run: |
+          cd project/gen/
+          echo "==============="
+          cat -n Message.h
+          echo "==============="
+          cat -n Message.c
+          echo "==============="
+
+      - name: run test
+        run: |
+          cd project/gen/
+          ./csorma_test
+
+  test_linux_tsan:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: java-version
+        run: java -version
+
+      - name: generate code
+        run: |
+          javac csorma_generator.java  && java csorma_generator ./project/
+
+      - name: compile binary with TSAN
+        run: |
+          cd project/gen/
+          ls -al
+          make -j 6 tsan_all && make tsan_tests
+
+      - name: check binary
+        run: |
+          cd project/gen/
+          ls -al
+          ldd csorma_test
+          ls -al csorma_test
+          ls -hal csorma_test
+
+      - name: debug
+        run: |
+          cd project/gen/
+          echo "==============="
+          cat -n Message.h
+          echo "==============="
+          cat -n Message.c
+          echo "==============="
+
+      - name: run test
+        run: |
+          cd project/gen/
+          ./csorma_test
+
+  test_linux_ubsan:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: java-version
+        run: java -version
+
+      - name: generate code
+        run: |
+          javac csorma_generator.java  && java csorma_generator ./project/
+
+      - name: compile binary with UBSAN
+        run: |
+          cd project/gen/
+          ls -al
+          make -j 6 ubsan_all && make ubsan_tests
 
       - name: check binary
         run: |

@@ -14,6 +14,9 @@ ifeq ($(findstring mingw, $(ccmachine)), mingw)
 endif
 
 ASANCFLAGS = -fsanitize=address -fno-omit-frame-pointer -static-libasan
+TSANCFLAGS = -fsanitize=thread -fno-omit-frame-pointer -static-libasan
+UBSANCFLAGS = -fno-sanitize-recover=all -fsanitize=undefined,float-divide-by-zero
+
 CFLAGS += -g -O3 -fPIC -Wall -Wextra -Werror=maybe-uninitialized -Wdouble-promotion -Wno-unknown-warning-option -std=c99 -pedantic -pthread -I./
 LIBSSQLITE3 = -lm
 
@@ -38,8 +41,22 @@ asan_all: asan_build all
 asan_tests: asan_build tests
 asan_csorma_stub: asan_build csorma_stub
 
+tsan_all: tsan_build all
+tsan_tests: tsan_build tests
+tsan_csorma_stub: tsan_build csorma_stub
+
+ubsan_all: ubsan_build all
+ubsan_tests: ubsan_build tests
+ubsan_csorma_stub: ubsan_build csorma_stub
+
 asan_build:
 	$(eval CFLAGS += $(ASANCFLAGS))
+
+tsan_build:
+	$(eval CFLAGS += $(TSANCFLAGS))
+
+ubsan_build:
+	$(eval CFLAGS += $(UBSANCFLAGS))
 
 tests: csorma_test csorma_example
 
