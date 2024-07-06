@@ -78,6 +78,75 @@ jobs:
         run:  |
           ./dockcross-linux-arm64 bash -c './.cross/cross.sh' || echo "NO ERR"
 
+
+  linux_nightly:
+    name: Nightly Artifact Linux Build
+    runs-on: ubuntu-20.04
+    needs: [update-nightly-tag]
+    if: |
+      always() &&
+      (needs.update-nightly-tag.result == 'success' ||
+        needs.update-nightly-tag.result == 'skipped')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install deps
+        run: |
+          sudo apt-get update && \
+          sudo DEBIAN_FRONTEND=noninteractive \
+          apt-get install -y --no-install-recommends \
+          ca-certificates \
+          coreutils autoconf libtool pkg-config \
+          libsodium-dev libcurl4-gnutls-dev
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: java-version
+        run: java -version
+
+      - name: compile
+        run: |
+          cd src/
+          make -j30
+
+      - name: check binary
+        run: |
+          cd src/
+          ls -al
+          ldd ToxProxy
+          ls -al ToxProxy
+          ls -hal ToxProxy
+
+      - name: Rename artifact for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/tweaks_001'
+        run: |
+          cp -v ./src/ToxProxy ToxProxy_linux_nightly
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ToxProxy_linux_nightly
+          path: ToxProxy_linux_nightly
+
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/tweaks_001'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "ToxProxy_linux_nightly"
+
+
   test_linux:
     runs-on: ubuntu-22.04
     steps:
