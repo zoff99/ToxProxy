@@ -5,6 +5,16 @@ on:
   pull_request:
 
 jobs:
+  update-nightly-tag:
+    name: Update nightly release tag
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/tweaks_001'
+    permissions:
+        contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move nightly tag to head for nightly release
+        run: git tag -f nightly && git push origin nightly -f
 
   test_riscv64:
     runs-on: ubuntu-22.04
