@@ -242,7 +242,13 @@ jobs:
 
   test_wine:
     runs-on: ubuntu-22.04
-    if: ${{ true }}
+    needs: [update-nightly-tag]
+    if: |
+      always() &&
+      (needs.update-nightly-tag.result == 'success' ||
+        needs.update-nightly-tag.result == 'skipped')
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -363,4 +369,29 @@ jobs:
           file ToxProxy.exe
           ls -al ToxProxy.exe
           ls -hal ToxProxy.exe
+
+      - name: Rename artifact for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/tweaks_001'
+        run: |
+          cp -v ./src/ToxProxy.exe ToxProxy_win_nightly.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ToxProxy_win_nightly.exe
+          path: ToxProxy_win_nightly.exe
+
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/tweaks_001'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "ToxProxy_win_nightly.exe"
+
 
