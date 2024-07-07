@@ -1785,6 +1785,13 @@ static void *notification_thread_func(void *UNUSED(data))
                             curl_init_string(&s);
 
 #ifdef WIN32
+/*
+Starting with libcurl 7.71.0 it has the ability to use the Windows CA cert store
+when built to use OpenSSL.
+You then need to use the CURLOPT_SSL_OPTIONS option and set the correct
+bit in the bitmask: CURLSSLOPT_NATIVE_CA.
+*/
+
                             dbg(LOGLEVEL_INFO, "setting CURLSSLOPT_NATIVE_CA on Windows platform");
                             curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
 #endif
@@ -2184,6 +2191,13 @@ int main(int argc, char *argv[])
     dbg(LOGLEVEL_INFO, "ToxProxy version: %s", global_version_string);
     dbg(LOGLEVEL_INFO, "libsodium version: %s", sodium_version_string());
     dbg(LOGLEVEL_INFO, "toxcore version: v%d.%d.%d", (int)tox_version_major(), (int)tox_version_minor(), (int)tox_version_patch());
+
+#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP
+    dbg(LOGLEVEL_INFO, "libcurl version: %s", curl_version());
+#ifdef WIN32
+    dbg(LOGLEVEL_INFO, "libcurl running on Windows");
+#endif
+#endif
 
 #ifdef __MINGW32__
     mkdir(save_dir);
