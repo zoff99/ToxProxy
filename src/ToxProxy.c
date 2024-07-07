@@ -1794,6 +1794,10 @@ bit in the bitmask: CURLSSLOPT_NATIVE_CA.
 
                             dbg(LOGLEVEL_INFO, "setting CURLSSLOPT_NATIVE_CA on Windows platform");
                             curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+                            // WARNING: for some reason there are still issues with windows and CA store.
+                            // so ne need to turn off SSL verification of certs :-(
+                            // otherwise we get: "curl_easy_perform() failed: SSL peer certificate or SSH remote key was not OK"
+                            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 #endif
 
                             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
