@@ -613,11 +613,19 @@ void updateToxSavedata(const Tox *tox)
     uint8_t *savedata = calloc(1, size);
     tox_get_savedata(tox, savedata);
 
+#ifdef WIN32
+    // WARNING: for some reason rename() does not work on some windows systems
+    // !! now we are direclty writing into the savefile. which can cause problems on crash or multithreaded use !!
+    FILE *f = fopen(savedata_filename, "wb");
+    fwrite(savedata, size, 1, f);
+    fclose(f);
+#else
     FILE *f = fopen(savedata_tmp_filename, "wb");
     fwrite(savedata, size, 1, f);
     fclose(f);
 
     rename(savedata_tmp_filename, savedata_filename);
+#endif
     free(savedata);
 }
 
