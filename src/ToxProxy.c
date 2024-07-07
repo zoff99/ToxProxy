@@ -1785,7 +1785,7 @@ static void *notification_thread_func(void *UNUSED(data))
                             curl_init_string(&s);
 
 #ifdef WIN32
-                            dbg(LOGLEVEL_DEBUG, "setting CURLSSLOPT_NATIVE_CA on Windows platform");
+                            dbg(LOGLEVEL_INFO, "setting CURLSSLOPT_NATIVE_CA on Windows platform");
                             curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
 #endif
 
