@@ -56,6 +56,7 @@ mkdir -p ./mysuperstuff/
 create one file for each database table that you need.
 <br>
 create file for db table `Person` as `./mysuperstuff/_csorma_Person.java`
+<br>(don't worry it is not really Java, we just use the syntax here)
 ```Java
 @Table
 public class Person
@@ -71,7 +72,7 @@ public class Person
 }
 ```
 
-now create the sources with the generator. <b>you need at least java 17</b>.<br>
+now create the C sources with the Java CSORMA Generator. <b>you need at least java 17</b>.<br>
 ```bash
 javac csorma_generator.java && java csorma_generator ./mysuperstuff/
 ```
@@ -90,6 +91,7 @@ make csorma_stub
 
 if you want to build your project with <b>sqlcipher</b> (you need to have openssl and libssl and libcrypto installed):
 ```bash
+make clean # clean from the previous build
 ENCRYPT_CS=1 make csorma_stub
 ./csorma_stub
 ```
