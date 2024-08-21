@@ -22,8 +22,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Run auto dependency update
+    - name: Run auto dependency check
       run: ./tools/check_sqlite.sh
+
+    - name: Run auto dependency update
+      run: ./tools/download_sqlite_amalgamation.sh
 
     - name: check for changes
       run:  git diff || echo "no changes"
