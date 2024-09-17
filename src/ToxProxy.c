@@ -496,6 +496,21 @@ static void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bo
     orma_free_Friend(f);
 }
 
+size_t xnet_pack_u16(uint8_t *bytes, uint16_t v)
+{
+    bytes[0] = (v >> 8) & 0xff;
+    bytes[1] = v & 0xff;
+    return sizeof(v);
+}
+
+size_t xnet_pack_u32(uint8_t *bytes, uint32_t v)
+{
+    uint8_t *p = bytes;
+    p += xnet_pack_u16(p, (v >> 16) & 0xffff);
+    p += xnet_pack_u16(p, v & 0xffff);
+    return p - bytes;
+}
+
 time_t get_unix_time(void)
 {
     return time(NULL);
@@ -1144,13 +1159,56 @@ void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *messa
     dbg(LOGLEVEL_INFO, "Added friend: %s. Number of total friends: %zu", public_key_hex, friends);
 }
 
-void friend_message_cb(Tox *UNUSED(tox), uint32_t friend_number, TOX_MESSAGE_TYPE UNUSED(type), const uint8_t *UNUSED(message),
-                       size_t UNUSED(length), void *UNUSED(user_data))
+void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE UNUSED(type), const uint8_t *message,
+                       size_t length, void *UNUSED(user_data))
 {
     // char *default_msg = "YOU are using the old Message format! this is not supported!";
     // tox_friend_send_message(tox, friend_number, type, (uint8_t *) default_msg, strlen(default_msg), NULL);
 
     dbg(LOGLEVEL_WARN, "YOU are using the old Message format: fnum=%d", friend_number);
+
+    // check for msgV3 -------------------
+    if ((message) && (length > (TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH + TOX_MSGV3_GUARD)))
+    {
+        int pos = length - (TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH + TOX_MSGV3_GUARD);
+        // check for guard
+        uint8_t g1 = *(message + pos);
+        uint8_t g2 = *(message + pos + 1);
+
+        if ((g1 == 0) && (g2 == 0))
+        {
+            // ok, its a msgV3 message
+            uint8_t *msgV3_hash_buffer_bin = (uint8_t *)(message + pos + 2);
+            // send ACK now
+            uint32_t ts_sec = (uint32_t) get_unix_time();
+            uint32_t timestamp_unix = ts_sec;
+            uint32_t timestamp_unix_buf = 0;
+            xnet_pack_u32((uint8_t *)&timestamp_unix_buf, timestamp_unix);
+
+            const char* msg = "_"; // default message text for msgV3 ACK message
+            uint8_t *message_str_v3 = (uint8_t *)calloc(1, (size_t)(strlen(msg) + TOX_MSGV3_GUARD + TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH));
+            if (message_str_v3)
+            {
+                uint8_t* position = message_str_v3;
+                memcpy(position, msg, (size_t)(strlen(msg)));
+                position = position + strlen(msg);
+                position = position + TOX_MSGV3_GUARD;
+                memcpy(position, msgV3_hash_buffer_bin, (size_t)(TOX_MSGV3_MSGID_LENGTH));
+                position = position + TOX_MSGV3_MSGID_LENGTH;
+                memcpy(position, &timestamp_unix_buf, (size_t)(TOX_MSGV3_TIMESTAMP_LENGTH));
+
+                size_t new_len = strlen(msg) + TOX_MSGV3_GUARD + TOX_MSGV3_MSGID_LENGTH + TOX_MSGV3_TIMESTAMP_LENGTH;
+
+                TOX_ERR_FRIEND_SEND_MESSAGE error;
+                uint32_t UNUSED(res) = tox_friend_send_message(tox, (uint32_t)friend_number,
+                            (int)TOX_MESSAGE_TYPE_HIGH_LEVEL_ACK, (uint8_t *)message_str_v3,
+                            (size_t)new_len, &error);
+
+                free(message_str_v3);
+            }
+        }
+    }
+    // check for msgV3 -------------------
 }
 
 //
