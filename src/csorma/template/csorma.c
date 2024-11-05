@@ -1,8 +1,8 @@
 
 #ifdef ENCRYPT_CSORMA
-#include "sqlcipher/sqlite3.h"
+# include "sqlcipher/sqlite3.h"
 #else
-#include "sqlite/sqlite3.h"
+# include "sqlite/sqlite3.h"
 #endif
 #include "csorma.h"
 #include "logger.h"
@@ -99,6 +99,8 @@ csorma_s *csorma_str_int32t(csorma_s *out, const int32_t append_i)
     //       we use 15 just in case
     const int max_int32_char_len = 15;
     char s[max_int32_char_len + 1];
+    // clear 's' with NULL bytes
+    memset(s, 0, (max_int32_char_len + 1));
     snprintf(s, max_int32_char_len, "%d", append_i);
     csorma_s *result = csorma_str_con(out, (const char *)s, strlen(s));
     return result;
@@ -632,7 +634,9 @@ const char *csorma_get_sqlcipher_version(void)
 #ifdef ENCRYPT_CSORMA
     // TODO: have not found a way to get the version per function call. without crash or using `free` somewhere.
     //       so this is now updated by hand.
-    return "4.6.0";
+
+    // !! the hex code in the next line is used by the 'download_sqlcipher_amalgamation.sh' to find this line and update the version string !!
+    return "4.6.1 community"; // DO NOT REMOVE THIS: 0x0ffca123459837347ca6c5a8
 #else
     return "0.0.0";
 #endif
