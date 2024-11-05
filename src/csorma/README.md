@@ -224,8 +224,8 @@ printf("STUB: res3: %d\n", res3);
 #### Stub C code, some functions explained
 
 helper function csb and csc:<br>
-csb() will build a `csorma_str*` from a `const char*`<br>
-and csc() will append (or create) a `csorma_str*` from a `buffer and length`
+csb() will build a `csorma_str*` from a `const char*` NULL terminated C string<br>
+and csc() will append (or create) a `csorma_str*` from a `buffer and length` (no need for NULL termination)
 ```C
 #define csb(buf)
 #define csc(buf,len)
