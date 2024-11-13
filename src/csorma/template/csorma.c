@@ -485,6 +485,11 @@ void bind_to_where_sql_string(csorma_s *sql_where, OrmaBindvars *bind_where_vars
     bind_where_vars = bindvar_add_s(bind_where_vars, value_str);
 }
 
+void add_to_where_sql_string(csorma_s *sql_where, const char *static_text)
+{
+    sql_where = csorma_str_con(sql_where, static_text, strlen(static_text));
+}
+
 static uint8_t* str_buf_concat(const uint8_t *b1, const uint32_t b1_len, const uint8_t *b2, const uint32_t b2_len)
 {
     uint8_t *out = calloc(1, b1_len + b2_len + 1);
