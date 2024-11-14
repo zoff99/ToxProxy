@@ -176,7 +176,8 @@ typedef enum CONTROL_PROXY_MESSAGE_TYPE {
     CONTROL_PROXY_MESSAGE_TYPE_ALL_MESSAGES_SENT = 177,
     CONTROL_PROXY_MESSAGE_TYPE_PROXY_KILL_SWITCH = 178,
     CONTROL_PROXY_MESSAGE_TYPE_NOTIFICATION_TOKEN = 179,
-    CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND = 181
+    CONTROL_PROXY_MESSAGE_TYPE_PUSH_URL_FOR_FRIEND = 181,
+    CONTROL_PROXY_MESSAGE_TYPE_GROUP_ID_FOR_PROXY = 182
 } CONTROL_PROXY_MESSAGE_TYPE;
 
 FILE *logfile = NULL;
@@ -208,6 +209,8 @@ const char *shell_cmd__onoffline = "./scripts/on_offline.sh 2> /dev/null";
 uint32_t my_last_online_ts = 0;
 #define BOOTSTRAP_AFTER_OFFLINE_SECS 30
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
+
+#define STALE_TIME_SECS (24 * 3600) // 24 hours in seconds
 
 #define MAX_FILES_IN_ONE_MESSAGE_DIR 2000 // limit MSG files per directory
 #define MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR 2000 // limit ACK files per directory
@@ -250,6 +253,11 @@ bool file_exists(const char *path)
 {
     struct stat s;
     return stat(path, &s) == 0;
+}
+
+static uint32_t timestamp_now()
+{
+    return (uint32_t)time(NULL);
 }
 
 void openLogFile()
@@ -377,6 +385,7 @@ static void create_db()
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group\" ("
     "      \"groupid\" TEXT,    "
     "      \"is_silent\" BOOLEAN,    "
+    "      \"last_update_timestamp\" INTEGER,    "
     "      PRIMARY KEY(\"groupid\")    "
     "    );    "
     ;
@@ -389,6 +398,7 @@ static void create_db()
     "      \"pubkey\" TEXT,    "
     "      \"is_master\" BOOLEAN,    "
     "      \"is_silent\" BOOLEAN,    "
+    "      \"last_update_timestamp\" INTEGER,    "
     "      PRIMARY KEY(\"pubkey\")    "
     "    );    "
     ;
@@ -425,6 +435,7 @@ static void create_db()
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
+
     {
     char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group_message\" ("
     "  \"id\" INTEGER,"
@@ -456,8 +467,41 @@ static void create_db()
     dbg(LOGLEVEL_INFO, "res1: %d", res1);
     }
 
+    // -- update 0001 --
+    {
+    char *sql2 = "ALTER TABLE \"Friend\" ADD COLUMN last_update_timestamp INTEGER";
+    dbg(LOGLEVEL_INFO, "alter table: Friend");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
+
+    {
+    char *sql2 = "ALTER TABLE \"Group\" ADD COLUMN last_update_timestamp INTEGER";
+    dbg(LOGLEVEL_INFO, "alter table: Group");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
+
+    // =================================================================================
+    {
+    char *sql2 = "INSERT into \"Lov\" (key, value) values ('db_version', '1')";
+    dbg(LOGLEVEL_INFO, "db version: 1");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
+    {
+    char *sql2 = "update \"Lov\" set value='1' where key='db_version'";
+    dbg(LOGLEVEL_INFO, "db version: 1");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
+    // =================================================================================
+    // -- update 0001 --
+
     {
     char *sql2 = ""
+    "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Friend\" ON Friend (last_update_timestamp);"
+    "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Group\" ON Group (last_update_timestamp);"
     "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Message\" ON Message (timstamp_recv);"
     "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Group_message\" ON Group_message (timstamp_recv);"
     "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Message\" ON Message (message_hashid);"
@@ -474,6 +518,7 @@ static void add_group_to_db(const char *groupidhex, const uint32_t len)
     Group *g = orma_new_Group(o->db);
     g->groupid = csc(groupidhex, len);
     g->is_silent = false;
+    g->last_update_timestamp = timestamp_now();
     int64_t inserted_id = orma_insertIntoGroup(g);
     if (inserted_id > -1)
     {
@@ -482,18 +527,51 @@ static void add_group_to_db(const char *groupidhex, const uint32_t len)
     orma_free_Group(g);
 }
 
+static void update_group_timestamp_in_db(const char *groupidhex, const uint32_t len, const uint32_t ts)
+{
+    Group *g = orma_updateGroup(o->db);
+    int64_t affected_rows3 = g->last_update_timestampSet(g, (int64_t)ts)->
+        groupidEq(g, csc(groupidhex, len))->execute(g);
+    dbg(LOGLEVEL_INFO,"update_group_timestamp_in_db: affected rows: %d", (int)affected_rows3);
+}
+
+static void default_group_timestamp_in_db()
+{
+    Group *g = orma_updateGroup(o->db);
+    int64_t affected_rows3 = g->last_update_timestampSet(g, (int64_t)1)->
+        last_update_timestampNull(g)->execute(g);
+    dbg(LOGLEVEL_INFO,"default_group_timestamp_in_db: affected rows: %d", (int)affected_rows3);
+}
+
 static void add_friend_to_db(const char *pubkeyhex, const uint32_t len, const bool is_master)
 {
     Friend *f = orma_new_Friend(o->db);
     f->pubkey = csc(pubkeyhex, len);
     f->is_master = is_master;
     f->is_silent = false;
+    f->last_update_timestamp = timestamp_now();
     int64_t inserted_id = orma_insertIntoFriend(f);
     if (inserted_id > -1)
     {
         dbg(LOGLEVEL_INFO, "added friend to db, inserted id: %lld", (long long)inserted_id);
     }
     orma_free_Friend(f);
+}
+
+static void update_friend_timestamp_in_db(const char *pubkeyhex, const uint32_t len, const uint32_t ts)
+{
+    Friend *f = orma_updateFriend(o->db);
+    int64_t affected_rows3 = f->last_update_timestampSet(f, (int64_t)ts)->
+        pubkeyEq(f, csc(pubkeyhex, len))->execute(f);
+    dbg(LOGLEVEL_INFO, "update_friend_timestamp_in_db: affected rows: %d", (int)affected_rows3);
+}
+
+static void default_friends_timestamp_in_db()
+{
+    Friend *f = orma_updateFriend(o->db);
+    int64_t affected_rows3 = f->last_update_timestampSet(f, (int64_t)1)->
+        last_update_timestampNull(f)->execute(f);
+    dbg(LOGLEVEL_INFO, "default_friends_timestamp_in_db: affected rows: %d", (int)affected_rows3);
 }
 
 size_t xnet_pack_u16(uint8_t *bytes, uint16_t v)
@@ -1073,6 +1151,28 @@ void read_token_from_db()
     orma_free_LovList(pl);
 }
 
+/*
+static void get_master_pubkey_hex(char *public_key_hex)
+{
+    if (!public_key_hex)
+    {
+        return;
+    }
+    Self *s = orma_selectFromSelf(o->db);
+    SelfList *sl = s->toList(s);
+    Self **pd = sl->l;
+    for(int i=0;i<sl->items;i++)
+    {
+        const char* mpk = (const char*)(*pd)->master_pubkey->s;
+        if ((mpk != NULL) && (strlen(mpk) > 1))
+        {
+            memcpy(public_key_hex, (*pd)->master_pubkey->s, strlen(mpk));
+        }
+    }
+    orma_free_SelfList(sl);
+}
+*/
+
 bool is_master(const char *public_key_hex)
 {
     // mastersql
@@ -1104,6 +1204,66 @@ bool is_master(const char *public_key_hex)
 
     dbg(LOGLEVEL_DEBUG, "is master %s: no", public_key_hex);
     return false;
+}
+
+static void leave_old_groups(Tox *tox)
+{
+    Group *p = orma_selectFromGroup(o->db);
+    GroupList *pl = p->last_update_timestampLt(p, ((int64_t)timestamp_now() - (STALE_TIME_SECS)))->orderBygroupidAsc(p)->toList(p);
+    dbg(LOGLEVEL_INFO, "leave_old_groups: pl->items=%lld", (long long)pl->items);
+    Group **pd = pl->l;
+    for(int i=0;i<pl->items;i++)
+    {
+        uint8_t public_key_bin[tox_public_key_size()];
+        H2B((*pd)->groupid->s, public_key_bin);
+
+        Tox_Err_Group_State_Queries err1;
+        uint32_t group_number = tox_group_by_chat_id(tox, public_key_bin, &err1);
+
+        dbg(LOGLEVEL_INFO, "trying to leave old group: %s res=%d gnum=%d", (*pd)->groupid->s, (int)err1, (int)group_number);
+
+        if ((err1 == TOX_ERR_GROUP_STATE_QUERIES_OK) && (group_number != UINT32_MAX))
+        {
+            // leave old group
+            tox_group_leave(tox, group_number, (const uint8_t *)"", 0, NULL);
+            dbg(LOGLEVEL_INFO, "leave old group: %s", (*pd)->groupid->s);
+            updateToxSavedata(tox);
+        }
+        pd++;
+    }
+    orma_free_GroupList(pl);
+}
+
+static void leave_old_friends(Tox *tox)
+{
+    Friend *p = orma_selectFromFriend(o->db);
+    FriendList *pl = p->last_update_timestampLt(p, ((int64_t)timestamp_now() - (STALE_TIME_SECS)))->orderBypubkeyAsc(p)->toList(p);
+    // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
+    Friend **pd = pl->l;
+    for(int i=0;i<pl->items;i++)
+    {
+        if ((*pd)->pubkey->s != NULL)
+        {
+            if (!is_master((const char*)(*pd)->pubkey->s))
+            {
+                uint8_t public_key_bin[tox_public_key_size()];
+                H2B((*pd)->pubkey->s, public_key_bin);
+
+                Tox_Err_Friend_By_Public_Key err1;
+                uint32_t friend_number = tox_friend_by_public_key(tox, public_key_bin, &err1);
+
+                if ((err1 == TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK) && (friend_number != UINT32_MAX))
+                {
+                    // leave old friend
+                    tox_friend_delete(tox, friend_number, NULL);
+                    dbg(LOGLEVEL_INFO, "remove old friend: %s", (*pd)->pubkey->s);
+                    updateToxSavedata(tox);
+                }
+            }
+        }
+        pd++;
+    }
+    orma_free_FriendList(pl);
 }
 
 void getGroupIdHex_groupnumber(const Tox *tox, uint32_t group_number, char *hex)
@@ -1251,6 +1411,8 @@ void friendlist_onConnectionChange(Tox *tox, uint32_t friend_number, TOX_CONNECT
         if (connection_status != TOX_CONNECTION_NONE) {
             dbg(LOGLEVEL_INFO, "master is online, send him all cached unsent messages");
             masterIsOnline = true;
+            leave_old_friends(tox);
+            leave_old_groups(tox);
         } else {
             dbg(LOGLEVEL_INFO, "master went offline, don't send him any more messages.");
             masterIsOnline = false;
@@ -1366,7 +1528,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     // HINT: delete group messages for that incoming receipt, if any
     Group_message *p = orma_deleteFromGroup_message(o->db);
     int64_t affected_rows2 = p->message_sync_hashidEq(p, csb(msgid2_str))->execute(p);
-    dbg(LOGLEVEL_DEBUG, "deleteFromGroup_message: affected rows: %d\n", (int)affected_rows2);
+    dbg(LOGLEVEL_DEBUG, "deleteFromGroup_message: affected rows: %d", (int)affected_rows2);
     if (affected_rows2 > 0)
     {
         return;
@@ -1375,7 +1537,7 @@ void friend_read_receipt_message_v2_cb(Tox *tox, uint32_t friend_number, uint32_
     // HINT: delete messages for that incoming receipt, if any
     Message *m = orma_deleteFromMessage(o->db);
     int64_t affected_rows3 = m->message_sync_hashidEq(m, csb(msgid2_str))->execute(m);
-    dbg(LOGLEVEL_DEBUG, "deleteFromMessage: affected rows: %d\n", (int)affected_rows3);
+    dbg(LOGLEVEL_DEBUG, "deleteFromMessage: affected rows: %d", (int)affected_rows3);
     if (affected_rows3 > 0)
     {
         return;
@@ -1657,7 +1819,20 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         char public_key_hex[tox_public_key_hex_size];
         CLEAR(public_key_hex);
         bin2upHex(public_key, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
+        update_friend_timestamp_in_db(public_key_hex, tox_public_key_hex_size_without_null_termin, timestamp_now());
         dbg(LOGLEVEL_DEBUG, "added friend of my master (norequest) with pubkey: %s", public_key_hex);
+    } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_GROUP_ID_FOR_PROXY) {
+        if (length != (TOX_GROUP_CHAT_ID_SIZE) + 1) {
+            dbg(LOGLEVEL_WARN, "received ControlProxyMessageType_groupId message with wrong size");
+            return;
+        }
+
+        const uint8_t *public_key = data + 1;
+        char public_key_hex[tox_public_key_hex_size];
+        CLEAR(public_key_hex);
+        bin2upHex(public_key, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
+        update_group_timestamp_in_db(public_key_hex, tox_public_key_hex_size_without_null_termin, timestamp_now());
+        dbg(LOGLEVEL_DEBUG, "update group timestamp of groupid: %s", public_key_hex);
     } else if (data[0] == 170) {
         // toxutil.c CAP_PACKET_ID
     } else {
@@ -2351,6 +2526,9 @@ int main(int argc, char *argv[])
         }
     }
 
+    default_group_timestamp_in_db();
+    default_friends_timestamp_in_db();
+
     read_token_from_db();
 
     on_start();
@@ -2427,6 +2605,16 @@ int main(int argc, char *argv[])
 #endif
 
     migrate_legay_masterfile();
+
+    // ----------- add master --------------
+    // uint8_t master_public_key_bin[tox_public_key_size()];
+    // uint8_t master_public_key_hex[tox_public_key_size()*2 + 1];
+    // memset(master_public_key_hex, 0, tox_public_key_size()*2 + 1);
+    // get_master_pubkey_hex((char *)master_public_key_hex);
+    // hex_string_to_bin((const char*)master_public_key_hex, tox_public_key_size() * 2, (char *) master_public_key_bin, tox_public_key_size());
+    // tox_friend_add_norequest(tox, master_public_key_bin, NULL);
+    // updateToxSavedata(tox);
+    // ----------- add master --------------
 
 #if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
     curl_global_init(CURL_GLOBAL_ALL);
