@@ -49,7 +49,9 @@ static __@@@TABLE@@@__List* _to_list(__@@@TABLE@@@__* t)
     result->l = NULL;
 
     t->sql_start = csorma_str_con(t->sql_start, __SELECT_START, strlen(__SELECT_START));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
     t->sql_start = csorma_str_con(t->sql_start, __TABLE_NAME, strlen(__TABLE_NAME));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
 
     sqlite3_stmt *res;
     csorma_s *sql_txt = csorma_str_con2(NULL, t->sql_start);
@@ -120,7 +122,9 @@ static int64_t _count(__@@@TABLE@@@__* t)
     int64_t result = -1;
 
     t->sql_start = csorma_str_con(t->sql_start, __SELECT_COUNT_START, strlen(__SELECT_COUNT_START));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
     t->sql_start = csorma_str_con(t->sql_start, __TABLE_NAME, strlen(__TABLE_NAME));
+    t->sql_start = csorma_str_con(t->sql_start, "\"", strlen("\""));
 
     sqlite3_stmt *res;
     csorma_s *sql_txt = csorma_str_con2(NULL, t->sql_start);
