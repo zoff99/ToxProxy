@@ -180,7 +180,7 @@ chmod 755 -R /artefacts/
     # careful this uses "privileged" option for docker!!!!!!!!!!!!!!!
     # careful this uses "privileged" option for docker!!!!!!!!!!!!!!!
     # careful this uses "privileged" option for docker!!!!!!!!!!!!!!!
-    docker run --privileged -ti --rm \
+    docker run --privileged --rm \
       -v $_HOME_/"$system_to_build_for"/artefacts:/artefacts \
       -v $_HOME_/"$system_to_build_for"/script:/script \
       -v $_HOME_/"$system_to_build_for"/workspace:/workspace \
