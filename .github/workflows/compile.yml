@@ -16,6 +16,14 @@ jobs:
       - name: Move nightly tag to head for nightly release
         run: git tag -f nightly && git push origin nightly -f
 
+  build_appimage:
+    runs-on: ubuntu-22.04
+      - uses: actions/checkout@v4
+
+      - name: build appimage
+        run: cd .localrun ; ./appimage_it.sh
+
+
   test_riscv64:
     runs-on: ubuntu-22.04
     steps:
