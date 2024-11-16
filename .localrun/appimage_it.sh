@@ -88,6 +88,7 @@ pkgs_Ubuntu_18_04="
     libopus-dev
     libx264-dev
     libcurl4-gnutls-dev
+    openjdk-17-jdk
 "
 
 
