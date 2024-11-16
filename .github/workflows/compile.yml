@@ -23,7 +23,26 @@ jobs:
 
       - name: build appimage
         run: cd .localrun ; ./appimage_it.sh
+      - name: find appimage
+        run: find . -name 'ToxProxy_x86_64.AppImage'
 
+      - name: Rename artifact for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/tweaks_001'
+        run: |
+          cp -v ./.localrun/*_appimage/artefacts/ToxProxy_x86_64.AppImage ToxProxy_x86_64.AppImage
+
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/tweaks_001'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "ToxProxy_linux_nightly"
 
   test_riscv64:
     runs-on: ubuntu-22.04
