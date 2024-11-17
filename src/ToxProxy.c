@@ -28,11 +28,11 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 2
 #define VERSION_MINOR 0
-#define VERSION_PATCH 3
+#define VERSION_PATCH 4
 #if defined(__SANITIZE_ADDRESS__)
-    static const char global_version_string[] = "2.0.3-ASAN";
+    static const char global_version_string[] = "2.0.4-ASAN";
 #else
-    static const char global_version_string[] = "2.0.3";
+    static const char global_version_string[] = "2.0.4";
 #endif
 
 // ----------- version -----------
@@ -539,7 +539,7 @@ static void default_group_timestamp_in_db()
 {
     Group *g = orma_updateGroup(o->db);
     int64_t affected_rows3 = g->last_update_timestampSet(g, (int64_t)1)->
-        last_update_timestampNull(g)->execute(g);
+        last_update_timestampIsNull(g)->execute(g);
     dbg(LOGLEVEL_INFO,"default_group_timestamp_in_db: affected rows: %d", (int)affected_rows3);
 }
 
@@ -570,7 +570,7 @@ static void default_friends_timestamp_in_db()
 {
     Friend *f = orma_updateFriend(o->db);
     int64_t affected_rows3 = f->last_update_timestampSet(f, (int64_t)1)->
-        last_update_timestampNull(f)->execute(f);
+        last_update_timestampIsNull(f)->execute(f);
     dbg(LOGLEVEL_INFO, "default_friends_timestamp_in_db: affected rows: %d", (int)affected_rows3);
 }
 
