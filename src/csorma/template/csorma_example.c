@@ -415,39 +415,39 @@ char *sql2 = "CREATE TABLE IF NOT EXISTS \"Friendlist\" ("
 
     {
         Xx1 *mx1 = orma_selectFromXx1(o->db);
-        int bool1_how_many_null = (int)mx1->bool1Null(mx1)->count(mx1);
+        int bool1_how_many_null = (int)mx1->bool1IsNull(mx1)->count(mx1);
         printf("TEST: count bool1 is Null: %d\n", bool1_how_many_null);
         assert(bool1_how_many_null == 2);
     }
     {
         Xx1 *mx1 = orma_selectFromXx1(o->db);
-        int bool1_how_many_not_null = (int)mx1->bool1NotNull(mx1)->count(mx1);
+        int bool1_how_many_not_null = (int)mx1->bool1IsNotNull(mx1)->count(mx1);
         printf("TEST: count bool1 is NOT Null: %d\n", bool1_how_many_not_null);
         assert(bool1_how_many_not_null == 1);
     }
 
     {
         Xx1 *mx1 = orma_selectFromXx1(o->db);
-        int int1_how_many_null = (int)mx1->int1Null(mx1)->count(mx1);
+        int int1_how_many_null = (int)mx1->int1IsNull(mx1)->count(mx1);
         printf("TEST: count int1 is Null: %d\n", int1_how_many_null);
         assert(int1_how_many_null == 3);
     }
     {
         Xx1 *mx1 = orma_selectFromXx1(o->db);
-        int int1_how_many_not_null = (int)mx1->int1NotNull(mx1)->count(mx1);
+        int int1_how_many_not_null = (int)mx1->int1IsNotNull(mx1)->count(mx1);
         printf("TEST: count int1 is NOT Null: %d\n", int1_how_many_not_null);
         assert(int1_how_many_not_null == 0);
     }
 
     {
         Xx1 *mx1 = orma_selectFromXx1(o->db);
-        int txt1_how_many_null = (int)mx1->txt1Null(mx1)->count(mx1);
+        int txt1_how_many_null = (int)mx1->txt1IsNull(mx1)->count(mx1);
         printf("TEST: count txt1 is Null: %d\n", txt1_how_many_null);
         assert(txt1_how_many_null == 1);
     }
     {
         Xx1 *mx1 = orma_selectFromXx1(o->db);
-        int txt1_how_many_not_null = (int)mx1->txt1NotNull(mx1)->count(mx1);
+        int txt1_how_many_not_null = (int)mx1->txt1IsNotNull(mx1)->count(mx1);
         printf("TEST: count txt1 is NOT Null: %d\n", txt1_how_many_not_null);
         assert(txt1_how_many_not_null == 2);
     }
