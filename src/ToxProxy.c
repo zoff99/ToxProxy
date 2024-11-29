@@ -1151,7 +1151,6 @@ void read_token_from_db()
     orma_free_LovList(pl);
 }
 
-/*
 static void get_master_pubkey_hex(char *public_key_hex)
 {
     if (!public_key_hex)
@@ -1171,7 +1170,7 @@ static void get_master_pubkey_hex(char *public_key_hex)
     }
     orma_free_SelfList(sl);
 }
-*/
+
 
 bool is_master(const char *public_key_hex)
 {
@@ -1663,6 +1662,7 @@ void friend_message_v2_cb(Tox *tox, uint32_t friend_number, const uint8_t *raw_m
 
             if (masterIsOnline == false)
             {
+                dbg(LOGLEVEL_DEBUG, "ping_push_service:friend_message_v2_cb");
                 if (ping_push_service() == 1)
                 {
                     ping_push_service();
@@ -1852,6 +1852,7 @@ void send_sync_msgs_of_friend__messages(Tox *tox)
         {
             if (masterIsOnline == false)
             {
+                dbg(LOGLEVEL_DEBUG, "ping_push_service:send_sync_msgs_of_friend__messages");
                 if (ping_push_service() == 1)
                 {
                     ping_push_service();
@@ -1884,6 +1885,7 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
         {
             if (masterIsOnline == false)
             {
+                dbg(LOGLEVEL_DEBUG, "ping_push_service:send_sync_msgs_of_friend__groupmsgs");
                 if (ping_push_service() == 1)
                 {
                     ping_push_service();
@@ -1897,7 +1899,7 @@ void send_sync_msgs_of_friend__groupmsgs(Tox *tox)
 
         TOX_ERR_FRIEND_SEND_MESSAGE error;
         bool res2 = tox_util_friend_send_sync_message_v2(tox, 0, raw_message2, rawMsgSize2, &error);
-        dbg(LOGLEVEL_DEBUG, "send_sync_msgs_of_friend__groupmsgs: send_sync_msg res=%d; error=%d", (int)res2, error);
+        dbg(LOGLEVEL_DEBUG, "send_sync_msgs_of_friend__groupmsgs: send_sync_msg res=%d; error=%d rawMsgSize2=%d", (int)res2, error, (int)rawMsgSize2);
 
         pd++;
     }
@@ -2116,6 +2118,7 @@ static void group_message_callback(Tox *tox, uint32_t groupnumber, uint32_t peer
 
             if (masterIsOnline == false)
             {
+                dbg(LOGLEVEL_DEBUG, "ping_push_service:group_message_callback");
                 if (ping_push_service() == 1)
                 {
                     ping_push_service();
@@ -2422,6 +2425,59 @@ static void all_groups_peer_name(const Tox *tox)
     free(grouplist);
 }
 
+static int64_t get_master_friend_num(const Tox *tox)
+{
+    if (tox == NULL)
+    {
+        return -1;
+    }
+
+    if (tox_self_get_friend_list_size(tox) < 1)
+    {
+        return -2;
+    }
+
+    uint8_t master_public_key_bin[tox_public_key_size()];
+    uint8_t master_public_key_hex[tox_public_key_size()*2 + 1];
+    memset(master_public_key_hex, 0, tox_public_key_size()*2 + 1);
+    get_master_pubkey_hex((char *)master_public_key_hex);
+    hex_string_to_bin((const char*)master_public_key_hex, tox_public_key_size() * 2, (char *) master_public_key_bin, tox_public_key_size());
+
+    Tox_Err_Friend_By_Public_Key error;
+    uint32_t master_friend_num = tox_friend_by_public_key(tox, master_public_key_bin, &error);
+    if (error != TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK)
+    {
+        return -3;
+    }
+
+    return (int64_t)master_friend_num;
+}
+
+static void check_if_master_is_friend_zero(const Tox *tox)
+{
+    if (tox_self_get_friend_list_size(tox) > 0)
+    {
+        // if we have more than zero friends, check that friend 0 is master
+        // if not, exit program
+
+        int64_t master_friend_num = get_master_friend_num(tox);
+
+        if (master_friend_num < 0)
+        {
+            dbg(LOGLEVEL_ERROR, "master friend num not found. STOP NOW");
+            // exit now!
+            exit(128);
+        }
+
+        if (master_friend_num != 0)
+        {
+            dbg(LOGLEVEL_ERROR, "master friend num != 0 (fn=%d). STOP NOW", (int) master_friend_num);
+            // exit now!
+            exit(129);
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     openLogFile();
@@ -2606,15 +2662,38 @@ int main(int argc, char *argv[])
 
     migrate_legay_masterfile();
 
+/*
+    // ######## DEBUG ########
+    // ######## DEBUG ########
+    // ######## DEBUG ########
     // ----------- add master --------------
-    // uint8_t master_public_key_bin[tox_public_key_size()];
-    // uint8_t master_public_key_hex[tox_public_key_size()*2 + 1];
-    // memset(master_public_key_hex, 0, tox_public_key_size()*2 + 1);
-    // get_master_pubkey_hex((char *)master_public_key_hex);
-    // hex_string_to_bin((const char*)master_public_key_hex, tox_public_key_size() * 2, (char *) master_public_key_bin, tox_public_key_size());
-    // tox_friend_add_norequest(tox, master_public_key_bin, NULL);
-    // updateToxSavedata(tox);
+    // first we need to remove ALL friend. and then add master as friend 0
+    {
+        for(int i=0;i<200;i++) {
+            tox_friend_delete(tox, i, NULL);
+            dbg(LOGLEVEL_INFO, "remove friend num: %d", i);
+            updateToxSavedata(tox);
+        }
+    }
+    // -------------------------------------
+    uint8_t master_public_key_bin[tox_public_key_size()];
+    uint8_t master_public_key_hex[tox_public_key_size()*2 + 1];
+    memset(master_public_key_hex, 0, tox_public_key_size()*2 + 1);
+    get_master_pubkey_hex((char *)master_public_key_hex);
+    hex_string_to_bin((const char*)master_public_key_hex, tox_public_key_size() * 2, (char *) master_public_key_bin, tox_public_key_size());
+    tox_friend_add_norequest(tox, master_public_key_bin, NULL);
+    updateToxSavedata(tox);
     // ----------- add master --------------
+    // ######## DEBUG ########
+    // ######## DEBUG ########
+    // ######## DEBUG ########
+*/
+
+
+    // ---------- check that master is actually friend number 0 (zero) -----------
+    // if this check fails. stop here
+    check_if_master_is_friend_zero(tox);
+    // ---------- check that master is actually friend number 0 (zero) -----------
 
 #if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
     curl_global_init(CURL_GLOBAL_ALL);
@@ -2701,7 +2780,8 @@ int main(int argc, char *argv[])
         Group_messageList *pl = p->toList(p);
         // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
         if (pl->items > 0)
-            {
+        {
+            dbg(LOGLEVEL_DEBUG, "ping_push_service:have_any_groupmessages");
             if (ping_push_service() == 1)
             {
                 ping_push_service();
