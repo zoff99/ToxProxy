@@ -532,7 +532,7 @@ static void update_group_timestamp_in_db(const char *groupidhex, const uint32_t 
     Group *g = orma_updateGroup(o->db);
     int64_t affected_rows3 = g->last_update_timestampSet(g, (int64_t)ts)->
         groupidEq(g, csc(groupidhex, len))->execute(g);
-    dbg(LOGLEVEL_INFO,"update_group_timestamp_in_db: affected rows: %d", (int)affected_rows3);
+    dbg(LOGLEVEL_DEBUG,"update_group_timestamp_in_db: affected rows: %d", (int)affected_rows3);
 }
 
 static void default_group_timestamp_in_db()
@@ -563,7 +563,7 @@ static void update_friend_timestamp_in_db(const char *pubkeyhex, const uint32_t 
     Friend *f = orma_updateFriend(o->db);
     int64_t affected_rows3 = f->last_update_timestampSet(f, (int64_t)ts)->
         pubkeyEq(f, csc(pubkeyhex, len))->execute(f);
-    dbg(LOGLEVEL_INFO, "update_friend_timestamp_in_db: affected rows: %d", (int)affected_rows3);
+    dbg(LOGLEVEL_DEBUG, "update_friend_timestamp_in_db: affected rows: %d", (int)affected_rows3);
 }
 
 static void default_friends_timestamp_in_db()
@@ -1171,7 +1171,6 @@ static void get_master_pubkey_hex(char *public_key_hex)
     orma_free_SelfList(sl);
 }
 
-
 bool is_master(const char *public_key_hex)
 {
     // mastersql
@@ -1205,6 +1204,59 @@ bool is_master(const char *public_key_hex)
     return false;
 }
 
+static int64_t get_master_friend_num(const Tox *tox)
+{
+    if (tox == NULL)
+    {
+        return -1;
+    }
+
+    if (tox_self_get_friend_list_size(tox) < 1)
+    {
+        return -2;
+    }
+
+    uint8_t master_public_key_bin[tox_public_key_size()];
+    uint8_t master_public_key_hex[tox_public_key_size()*2 + 1];
+    memset(master_public_key_hex, 0, tox_public_key_size()*2 + 1);
+    get_master_pubkey_hex((char *)master_public_key_hex);
+    hex_string_to_bin((const char*)master_public_key_hex, tox_public_key_size() * 2, (char *) master_public_key_bin, tox_public_key_size());
+
+    Tox_Err_Friend_By_Public_Key error;
+    uint32_t master_friend_num = tox_friend_by_public_key(tox, master_public_key_bin, &error);
+    if (error != TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK)
+    {
+        return -3;
+    }
+
+    return (int64_t)master_friend_num;
+}
+
+static void check_if_master_is_friend_zero(const Tox *tox)
+{
+    if (tox_self_get_friend_list_size(tox) > 0)
+    {
+        // if we have more than zero friends, check that friend 0 is master
+        // if not, exit program
+
+        int64_t master_friend_num = get_master_friend_num(tox);
+
+        if (master_friend_num < 0)
+        {
+            dbg(LOGLEVEL_ERROR, "master friend num not found. STOP NOW");
+            // exit now!
+            exit(128);
+        }
+
+        if (master_friend_num != 0)
+        {
+            dbg(LOGLEVEL_ERROR, "master friend num != 0 (fn=%d). STOP NOW", (int) master_friend_num);
+            // exit now!
+            exit(129);
+        }
+    }
+}
+
 static void leave_old_groups(Tox *tox)
 {
     Group *p = orma_selectFromGroup(o->db);
@@ -1231,13 +1283,19 @@ static void leave_old_groups(Tox *tox)
         pd++;
     }
     orma_free_GroupList(pl);
+
+    {
+        Group *p = orma_deleteFromGroup(o->db);
+        int64_t affected_rows2 = p->last_update_timestampLt(p, ((int64_t)timestamp_now() - (STALE_TIME_SECS)))->execute(p);
+        dbg(LOGLEVEL_INFO, "deleted groups (affected rows): %d", (int)affected_rows2);
+    }
 }
 
 static void leave_old_friends(Tox *tox)
 {
     Friend *p = orma_selectFromFriend(o->db);
     FriendList *pl = p->last_update_timestampLt(p, ((int64_t)timestamp_now() - (STALE_TIME_SECS)))->orderBypubkeyAsc(p)->toList(p);
-    // dbg(LOGLEVEL_DEBUG, "pl->items=%lld", (long long)pl->items);
+    dbg(LOGLEVEL_INFO, "leave_old_friends: pl->items=%lld", (long long)pl->items);
     Friend **pd = pl->l;
     for(int i=0;i<pl->items;i++)
     {
@@ -1257,6 +1315,14 @@ static void leave_old_friends(Tox *tox)
                     tox_friend_delete(tox, friend_number, NULL);
                     dbg(LOGLEVEL_INFO, "remove old friend: %s", (*pd)->pubkey->s);
                     updateToxSavedata(tox);
+                    check_if_master_is_friend_zero(tox);
+                }
+
+                if ((*pd)->pubkey->l > 2) // just a sanity check, pubkey hex string should be at least 2 char long
+                {
+                    Friend *f_del = orma_deleteFromFriend(o->db);
+                    int64_t affected_rows2 = f_del->pubkeyEq(f_del, (*pd)->pubkey)->execute(f_del);
+                    dbg(LOGLEVEL_INFO, "deleted friend (affected rows): %d", (int)affected_rows2);
                 }
             }
         }
@@ -2425,59 +2491,6 @@ static void all_groups_peer_name(const Tox *tox)
     free(grouplist);
 }
 
-static int64_t get_master_friend_num(const Tox *tox)
-{
-    if (tox == NULL)
-    {
-        return -1;
-    }
-
-    if (tox_self_get_friend_list_size(tox) < 1)
-    {
-        return -2;
-    }
-
-    uint8_t master_public_key_bin[tox_public_key_size()];
-    uint8_t master_public_key_hex[tox_public_key_size()*2 + 1];
-    memset(master_public_key_hex, 0, tox_public_key_size()*2 + 1);
-    get_master_pubkey_hex((char *)master_public_key_hex);
-    hex_string_to_bin((const char*)master_public_key_hex, tox_public_key_size() * 2, (char *) master_public_key_bin, tox_public_key_size());
-
-    Tox_Err_Friend_By_Public_Key error;
-    uint32_t master_friend_num = tox_friend_by_public_key(tox, master_public_key_bin, &error);
-    if (error != TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK)
-    {
-        return -3;
-    }
-
-    return (int64_t)master_friend_num;
-}
-
-static void check_if_master_is_friend_zero(const Tox *tox)
-{
-    if (tox_self_get_friend_list_size(tox) > 0)
-    {
-        // if we have more than zero friends, check that friend 0 is master
-        // if not, exit program
-
-        int64_t master_friend_num = get_master_friend_num(tox);
-
-        if (master_friend_num < 0)
-        {
-            dbg(LOGLEVEL_ERROR, "master friend num not found. STOP NOW");
-            // exit now!
-            exit(128);
-        }
-
-        if (master_friend_num != 0)
-        {
-            dbg(LOGLEVEL_ERROR, "master friend num != 0 (fn=%d). STOP NOW", (int) master_friend_num);
-            // exit now!
-            exit(129);
-        }
-    }
-}
-
 int main(int argc, char *argv[])
 {
     openLogFile();
@@ -2667,9 +2680,9 @@ int main(int argc, char *argv[])
     // ######## DEBUG ########
     // ######## DEBUG ########
     // ----------- add master --------------
-    // first we need to remove ALL friend. and then add master as friend 0
+    // first we need to remove ALL friends. and then add master as friend 0
     {
-        for(int i=0;i<200;i++) {
+        for(int i=0;i<2000;i++) {
             tox_friend_delete(tox, i, NULL);
             dbg(LOGLEVEL_INFO, "remove friend num: %d", i);
             updateToxSavedata(tox);
