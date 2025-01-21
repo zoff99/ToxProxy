@@ -28,3 +28,7 @@ int main()
     const char *orma_secret_key = "secret007$%";
     int key_result = OrmaDatabase_key(o, (uint8_t*)orma_secret_key, strlen(orma_secret_key));
     printf("STUB: setting sqlcipher key. result = %d\n", key_result);
+
+    // HINT: set WAL mode for a performance increase
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_set_wal_mode(o, true);
+    printf("STUB: activating WAL mode. result = %d\n", (int)res1);

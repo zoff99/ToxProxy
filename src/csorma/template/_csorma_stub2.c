@@ -1,4 +1,9 @@
 
+    // ------- your commands here -------
+
+
+    // ------- your commands here -------
+
     OrmaDatabase_shutdown(o);
     printf("\n");
     printf("STUB: all OK\n");

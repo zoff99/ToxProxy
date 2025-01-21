@@ -139,6 +139,7 @@ int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len
 void OrmaDatabase_lock_lastrowid_mutex(void);
 void OrmaDatabase_unlock_lastrowid_mutex(void);
 
+CSORMA_GENERIC_RESULT OrmaDatabase_set_wal_mode(OrmaDatabase *o, const bool use_wal);
 void OrmaDatabase_shutdown(OrmaDatabase *o);
 
 CSORMA_GENERIC_RESULT OrmaDatabase_run_multi_sql(const OrmaDatabase *o, const uint8_t *sqltxt);

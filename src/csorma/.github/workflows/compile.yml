@@ -6,6 +6,16 @@ on:
 
 jobs:
 
+  update-nightly-tag:
+    name: Update nightly release tag
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+        contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move nightly tag to head for nightly release
+        run: git tag -f nightly && git push origin nightly -f
 
   test_linux_big:
     runs-on: ubuntu-22.04
@@ -16,6 +26,27 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+
+      - name: java-version
+        run: java -version
+
+      - name: run big test
+        run: |
+          cd tests/
+          time ./t.sh
+
+  test_linux_big_arm:
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: arch
+        run: uname -a
 
       - name: java-version
         run: java -version
@@ -73,8 +104,24 @@ jobs:
 
   test_linux_asan:
     runs-on: ubuntu-22.04
+    needs: [update-nightly-tag]
+    if: |
+      always() &&
+      (needs.update-nightly-tag.result == 'success' ||
+        needs.update-nightly-tag.result == 'skipped')
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: install deps
+        run: |
+          sudo apt-get update && \
+          sudo DEBIAN_FRONTEND=noninteractive \
+          apt-get install -y --no-install-recommends \
+          fonts-freefont-otf \
+          ghostscript \
+          imagemagick
 
       - uses: actions/setup-java@v4
         with:
@@ -114,7 +161,80 @@ jobs:
       - name: run test
         run: |
           cd project/gen/
+          set -o pipefail
+          ./csorma_test 2>&1 | tee out.txt
+
+      - name: make image of python console output
+        run: |
+          cd project/gen/
+          cat out.txt | convert -trim -border 20 -bordercolor black +repage -background black -fill '#00cc00' -pointsize 14 TEXT:- ../../console_01_screen.png
+
+      - name: show image file names
+        run: |
+          cd project/gen/
+          ls -rattl
+
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.ref == 'refs/heads/master'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "console_01_screen-*.png"
+
+  test_linux_asan_arm:
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: arch
+        run: uname -a
+
+      - name: java-version
+        run: java -version
+
+      - name: generate code
+        run: |
+          javac csorma_generator.java  && java csorma_generator ./project/
+
+      - name: compile binary with ASAN
+        run: |
+          cd project/gen/
+          ls -al
+          make -j 6 asan_all && make asan_tests
+
+      - name: check binary
+        run: |
+          cd project/gen/
+          ls -al
+          ldd csorma_test
+          ls -al csorma_test
+          ls -hal csorma_test
+
+      - name: debug
+        run: |
+          cd project/gen/
+          echo "==============="
+          cat -n Message.h
+          echo "==============="
+          cat -n Message.c
+          echo "==============="
+
+      - name: run test
+        run: |
+          cd project/gen/
           ./csorma_test
+
 
   test_linux_tsan:
     runs-on: ubuntu-22.04

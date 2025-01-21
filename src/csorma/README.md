@@ -98,12 +98,20 @@ ENCRYPT_CS=1 make csorma_stub
 
 the output should look (something) like this:
 ```
-STUB: CSORMA version: 0.99.0
-STUB: CSORMA SQLite version: 3.45.3
-STUB: creating table: Person
+STUB: CSORMA version: 0.99.3-SQLCIPHER
+STUB: CSORMA SQLite version: 3.46.1
+STUB: CSORMA sqlcipher version: 4.6.1 community
+STUB: setting sqlcipher key. result = 0
+STUB: activating WAL mode. result = 0
+STUB: creating table: Message
+STUB: res1: 0
+STUB: creating table: Friendlist
+STUB: res1: 0
+STUB: creating table: Xx1
 STUB: res1: 0
 
 STUB: all OK
+
 ```
 
 you now have your working C project stub.<br>
@@ -116,7 +124,7 @@ vim csorma_stub.c
 ```
 
 now let's add commands<br>
-(after the `"OrmaDatabase_run_multi_sql()"` line)<br>
+(between the `------- your commands here -------` lines)<br>
 to insert a row:
 ```C
 { // HINT: using blocks here to have `p` be a local var
@@ -256,6 +264,12 @@ OrmaDatabase *o = OrmaDatabase_init(
 );
 ```
 
+now set the WAL mode:
+```C
+OrmaDatabase_set_wal_mode(o, true);
+);
+```
+
 run a freehand SQL:
 ```C
 char *sql1 = "CREATE TABLE IF NOT EXISTS Message ("
@@ -278,6 +292,10 @@ OrmaDatabase_shutdown(o);
 ### sqlcipher source code
 sqlcipher source code is generated from latest [sqlcipher git repository](https://github.com/sqlcipher/sqlcipher) using this [tool](https://github.com/zoff99/gen_sqlcipher_amalgamation)<br>
 you can download the generated sqlcipher code from https://github.com/zoff99/gen_sqlcipher_amalgamation/releases/tag/nightly
+
+### Automated Screenshots taken from CI
+<img src="https://github.com/zoff99/csorma/releases/download/nightly/console_01_screen-0.png" width="300">
+<br>
 
 <br>
 Any use of this project's code by GitHub Copilot, past or present, is done
