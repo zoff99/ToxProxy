@@ -167,7 +167,9 @@ jobs:
       - name: make image of python console output
         run: |
           cd project/gen/
-          cat out.txt | convert -trim -border 20 -bordercolor black +repage -background black -fill '#00cc00' -pointsize 14 TEXT:- ../../console_01_screen.png
+          cat out.txt | head -60 > out2.txt
+          cat out.txt | tail -60 >> out2.txt
+          cat out2.txt | convert -trim -border 20 -bordercolor black +repage -background black -fill '#00cc00' -pointsize 14 TEXT:- ../../console_01_screen.png
 
       - name: show image file names
         run: |
