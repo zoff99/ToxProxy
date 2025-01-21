@@ -575,6 +575,17 @@ int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len
 #endif
 }
 
+CSORMA_GENERIC_RESULT OrmaDatabase_set_wal_mode(OrmaDatabase *o, const bool use_wal)
+{
+    if (use_wal) {
+        // HINT: turn on WAL mode. this will persist also when you close and reopen the DB
+        return OrmaDatabase_run_multi_sql(o, (const uint8_t *)"PRAGMA journal_mode = WAL;");
+    } else {
+        // HINT: turn off WAL mode. this will persist also when you close and reopen the DB
+        return OrmaDatabase_run_multi_sql(o, (const uint8_t *)"PRAGMA journal_mode = DELETE;");
+    }
+}
+
 void OrmaDatabase_shutdown(OrmaDatabase *o)
 {
     if (o == NULL)
