@@ -43,8 +43,8 @@ int main()
     printf("TEST: setting sqlcipher key. result = %d\n", r);
 
     {
-        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_set_wal_mode(o, true);
-        printf("TEST: activating WAL mode. result = %d\n", (int)res1);
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_set_wal_mode(o, false);
+        printf("TEST: disabling WAL mode. result = %d\n", (int)res1);
     }
 
     // ----------- freehand SQL to create TABLE -----------

@@ -102,7 +102,7 @@ STUB: CSORMA version: 0.99.3-SQLCIPHER
 STUB: CSORMA SQLite version: 3.46.1
 STUB: CSORMA sqlcipher version: 4.6.1 community
 STUB: setting sqlcipher key. result = 0
-STUB: activating WAL mode. result = 0
+STUB: disabling WAL mode. result = 0
 STUB: creating table: Message
 STUB: res1: 0
 STUB: creating table: Friendlist
@@ -261,12 +261,6 @@ const char *db_filename = "";
 OrmaDatabase *o = OrmaDatabase_init(
     (uint8_t*)db_dir, strlen(db_dir),
     (uint8_t*)db_filename, strlen(db_filename)
-);
-```
-
-now set the WAL mode:
-```C
-OrmaDatabase_set_wal_mode(o, true);
 );
 ```
 
