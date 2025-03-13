@@ -212,6 +212,8 @@ TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 
 #define STALE_TIME_SECS (24 * 3600) // 24 hours in seconds
 
+#define TWO_HOURS_IN_MILLIS (2 * 3600 * 1000) // 2 hours in millis
+
 #define MAX_FILES_IN_ONE_MESSAGE_DIR 2000 // limit MSG files per directory
 #define MAX_ANSWER_FILES_IN_ONE_MESSAGE_DIR 2000 // limit ACK files per directory
 
@@ -363,6 +365,16 @@ void tox_log_cb__custom(Tox *UNUSED(tox), TOX_LOG_LEVEL level, const char *file,
     if (level == TOX_LOG_LEVEL_WARNING) {log_level = LOGLEVEL_WARN;}
     if (level == TOX_LOG_LEVEL_ERROR) {log_level = LOGLEVEL_ERROR;}
     dbg(log_level, "ToxCore LogMsg: [%d] %s:%d - %s:%s", (int) level, file, (int) line, func, message);
+}
+
+// gives a counter value that increaes every millisecond
+static uint64_t current_time_monotonic_app()
+{
+    uint64_t time = 0;
+    struct timespec clock_mono;
+    clock_gettime(CLOCK_MONOTONIC, &clock_mono);
+    time = 1000ULL * clock_mono.tv_sec + (clock_mono.tv_nsec / 1000000ULL);
+    return time;
 }
 
 static void shutdown_db()
@@ -2041,6 +2053,8 @@ int ping_push_service()
 /* TODO: CHECK */
 static void *notification_thread_func(void *UNUSED(data))
 {
+    uint64_t back_off_base_time = 0;
+
     while (notification_thread_stop == 0)
     {
         if (need_send_notification == 1)
@@ -2051,91 +2065,99 @@ static void *notification_thread_func(void *UNUSED(data))
             }
             else
             {
-                if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_UNIFIEDPUSH)
+                if ((back_off_base_time == 0) || (current_time_monotonic_app() > back_off_base_time))
                 {
-                    dbg(LOGLEVEL_DEBUG, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
-                    int result = 1;
-                    CURL *curl = NULL;
-                    CURLcode res = 0;
-
-                    size_t max_buf_len = strlen(NOTIFICATION__device_token) + 1;
-
-                    if (
-                        (max_buf_len <= strlen(NOTIFICATION_GOTIFY_UP_PREFIX))
-                        ||
-                        (strncmp(NOTIFICATION_GOTIFY_UP_PREFIX, NOTIFICATION__device_token, strlen(NOTIFICATION_GOTIFY_UP_PREFIX)) != 0)
-                       )
+                    if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_UNIFIEDPUSH)
                     {
-                        // HINT: token does not start with "https://"
-                    }
-                    else
-                    {
-                        char buf[max_buf_len + 1];
-                        memset(buf, 0, max_buf_len + 1);
-                        snprintf(buf, max_buf_len, "%s", NOTIFICATION__device_token);
+                        dbg(LOGLEVEL_DEBUG, "ping_push_service:NOTIFICATION_METHOD UNIFIEDPUSH");
+                        int result = 1;
+                        CURL *curl = NULL;
+                        CURLcode res = 0;
 
-                        curl = curl_easy_init();
+                        size_t max_buf_len = strlen(NOTIFICATION__device_token) + 1;
 
-                        if (curl)
+                        if (
+                            (max_buf_len <= strlen(NOTIFICATION_GOTIFY_UP_PREFIX))
+                            ||
+                            (strncmp(NOTIFICATION_GOTIFY_UP_PREFIX, NOTIFICATION__device_token, strlen(NOTIFICATION_GOTIFY_UP_PREFIX)) != 0)
+                        )
                         {
-                            struct curl_string s;
-                            curl_init_string(&s);
+                            // HINT: token does not start with "https://"
+                        }
+                        else
+                        {
+                            char buf[max_buf_len + 1];
+                            memset(buf, 0, max_buf_len + 1);
+                            snprintf(buf, max_buf_len, "%s", NOTIFICATION__device_token);
 
-#ifdef WIN32
-/*
-Starting with libcurl 7.71.0 it has the ability to use the Windows CA cert store
-when built to use OpenSSL.
-You then need to use the CURLOPT_SSL_OPTIONS option and set the correct
-bit in the bitmask: CURLSSLOPT_NATIVE_CA.
-*/
+                            curl = curl_easy_init();
 
-                            dbg(LOGLEVEL_INFO, "setting CURLSSLOPT_NATIVE_CA on Windows platform");
-                            curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
-                            // WARNING: for some reason there are still issues with windows and CA store.
-                            // so ne need to turn off SSL verification of certs :-(
-                            // otherwise we get: "curl_easy_perform() failed: SSL peer certificate or SSH remote key was not OK"
-                            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-#endif
-
-                            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
-                            curl_easy_setopt(curl, CURLOPT_URL, buf);
-                            curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
-
-                            dbg(LOGLEVEL_DEBUG, "request=%s", buf);
-
-                            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc);
-                            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
-
-                            res = curl_easy_perform(curl);
-
-                            if (res != CURLE_OK)
+                            if (curl)
                             {
-                                dbg(LOGLEVEL_DEBUG, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
-                            }
-                            else
-                            {
-                                long http_code = 0;
-                                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-                                if ((http_code < 300) && (http_code > 199))
+                                struct curl_string s;
+                                curl_init_string(&s);
+
+    #ifdef WIN32
+    /*
+    Starting with libcurl 7.71.0 it has the ability to use the Windows CA cert store
+    when built to use OpenSSL.
+    You then need to use the CURLOPT_SSL_OPTIONS option and set the correct
+    bit in the bitmask: CURLSSLOPT_NATIVE_CA.
+    */
+
+                                dbg(LOGLEVEL_INFO, "setting CURLSSLOPT_NATIVE_CA on Windows platform");
+                                curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+                                // WARNING: for some reason there are still issues with windows and CA store.
+                                // so ne need to turn off SSL verification of certs :-(
+                                // otherwise we get: "curl_easy_perform() failed: SSL peer certificate or SSH remote key was not OK"
+                                curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    #endif
+
+                                curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "ping=1");
+                                curl_easy_setopt(curl, CURLOPT_URL, buf);
+                                curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
+
+                                dbg(LOGLEVEL_DEBUG, "request=%s", buf);
+
+                                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc);
+                                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+
+                                res = curl_easy_perform(curl);
+
+                                if (res != CURLE_OK)
                                 {
-                                    dbg(LOGLEVEL_DEBUG, "server_answer:OK:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
-                                    result = 0;
+                                    dbg(LOGLEVEL_DEBUG, "curl_easy_perform() failed: %s", curl_easy_strerror(res));
                                 }
                                 else
                                 {
-                                    dbg(LOGLEVEL_DEBUG, "server_answer:ERROR:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
-                                    result = 0; // do not retry, or the server may be spammed
+                                    long http_code = 0;
+                                    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+                                    if ((http_code < 300) && (http_code > 199))
+                                    {
+                                        dbg(LOGLEVEL_DEBUG, "server_answer:OK:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
+                                        result = 0;
+                                    }
+                                    else if (http_code == 429) // "Too Many Requests"
+                                    {
+                                        back_off_base_time = current_time_monotonic_app() + TWO_HOURS_IN_MILLIS;
+                                        dbg(LOGLEVEL_DEBUG, "server_answer:Too Many Requests:backing off for 2 hours ...");
+                                    }
+                                    else
+                                    {
+                                        dbg(LOGLEVEL_DEBUG, "server_answer:ERROR:CURLINFO_RESPONSE_CODE=%ld, %s", http_code, s.ptr);
+                                        result = 0; // do not retry, or the server may be spammed
+                                    }
+                                    free(s.ptr);
+                                    s.ptr = NULL;
                                 }
-                                free(s.ptr);
-                                s.ptr = NULL;
+
+                                curl_easy_cleanup(curl);
                             }
 
-                            curl_easy_cleanup(curl);
-                        }
-
-                        if (result == 0)
-                        {
-                            need_send_notification = 0;
+                            if (result == 0)
+                            {
+                                need_send_notification = 0;
+                            }
                         }
                     }
                 }
