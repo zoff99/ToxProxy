@@ -2141,6 +2141,7 @@ static void *notification_thread_func(void *UNUSED(data))
                                     {
                                         back_off_base_time = current_time_monotonic_app() + TWO_HOURS_IN_MILLIS;
                                         dbg(LOGLEVEL_DEBUG, "server_answer:Too Many Requests:backing off for 2 hours ...");
+                                        usleep_usec(1000L * (uint64_t)TWO_HOURS_IN_MILLIS); // sleep 2 hours
                                     }
                                     else
                                     {
