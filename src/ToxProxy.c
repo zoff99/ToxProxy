@@ -143,11 +143,11 @@ static const char *LOV_KEY_PUSHTOKEN = "PUSHTOKEN";
 #define NOTI__device_token_max_len 300
 
 #define NOTIFICATION_METHOD_NONE 0
-#define NOTIFICATION_METHOD_GOTIFY_UP 3
+#define NOTIFICATION_METHOD_UNIFIEDPUSH 3
 
-#define NOTIFICATION_METHOD NOTIFICATION_METHOD_GOTIFY_UP
+#define NOTIFICATION_METHOD NOTIFICATION_METHOD_UNIFIEDPUSH
 
-#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP
+#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_UNIFIEDPUSH
 #include <curl/curl.h>
 #endif
 
@@ -2026,7 +2026,7 @@ int ping_push_service()
         return 1;
     }
 
-    if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+    if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_UNIFIEDPUSH)
     {
         dbg(LOGLEVEL_DEBUG, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
         need_send_notification = 1;
@@ -2051,7 +2051,7 @@ static void *notification_thread_func(void *UNUSED(data))
             }
             else
             {
-                if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+                if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_UNIFIEDPUSH)
                 {
                     dbg(LOGLEVEL_DEBUG, "ping_push_service:NOTIFICATION_METHOD GOTIFY_UP");
                     int result = 1;
@@ -2494,7 +2494,7 @@ int main(int argc, char *argv[])
     dbg(LOGLEVEL_INFO, "libsodium version: %s", sodium_version_string());
     dbg(LOGLEVEL_INFO, "toxcore version: v%d.%d.%d", (int)tox_version_major(), (int)tox_version_minor(), (int)tox_version_patch());
 
-#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP
+#if NOTIFICATION_METHOD == NOTIFICATION_METHOD_UNIFIEDPUSH
     dbg(LOGLEVEL_INFO, "libcurl version: %s", curl_version());
 #ifdef WIN32
     dbg(LOGLEVEL_INFO, "libcurl running on Windows");
@@ -2696,7 +2696,7 @@ int main(int argc, char *argv[])
     check_if_master_is_friend_zero(tox);
     // ---------- check that master is actually friend number 0 (zero) -----------
 
-#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_UNIFIEDPUSH)
     curl_global_init(CURL_GLOBAL_ALL);
     need_send_notification = 0;
     notification_thread_stop = 0;
@@ -2915,7 +2915,7 @@ int main(int argc, char *argv[])
     tox_kill(tox);
 #endif
 
-#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_GOTIFY_UP)
+#if (NOTIFICATION_METHOD == NOTIFICATION_METHOD_UNIFIEDPUSH)
     notification_thread_stop = 1;
     pthread_join(notification_thread, NULL);
 
