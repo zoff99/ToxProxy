@@ -1293,8 +1293,24 @@ static void leave_old_groups(Tox *tox)
 
 static void leave_old_friends(Tox *tox)
 {
+    char master_public_key_hex[tox_public_key_size()*2 + 1];
+    memset(master_public_key_hex, 0, tox_public_key_size()*2 + 1);
+    get_master_pubkey_hex(master_public_key_hex);
+
     Friend *p = orma_selectFromFriend(o->db);
-    FriendList *pl = p->last_update_timestampLt(p, ((int64_t)timestamp_now() - (STALE_TIME_SECS)))->orderBypubkeyAsc(p)->toList(p);
+    FriendList *pl = NULL;
+    if (strlen(master_public_key_hex) < 1)
+    {
+        pl = p->last_update_timestampLt(p, ((int64_t)timestamp_now() - (STALE_TIME_SECS)))
+           ->orderBypubkeyAsc(p)->toList(p);
+    }
+    else
+    {
+        pl = p->last_update_timestampLt(p, ((int64_t)timestamp_now() - (STALE_TIME_SECS)))
+           ->pubkeyNotEq(p, csb(master_public_key_hex))
+           ->orderBypubkeyAsc(p)->toList(p);
+    }
+
     dbg(LOGLEVEL_INFO, "leave_old_friends: pl->items=%lld", (long long)pl->items);
     Friend **pd = pl->l;
     for(int i=0;i<pl->items;i++)
