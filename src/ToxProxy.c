@@ -1492,8 +1492,8 @@ void friendlist_onConnectionChange(Tox *tox, uint32_t friend_number, TOX_CONNECT
         if (connection_status != TOX_CONNECTION_NONE) {
             dbg(LOGLEVEL_INFO, "master is online, send him all cached unsent messages");
             masterIsOnline = true;
-            leave_old_friends(tox);
-            leave_old_groups(tox);
+            //** NOT fully working yet **// leave_old_friends(tox);
+            //** NOT fully working yet **// leave_old_groups(tox);
         } else {
             dbg(LOGLEVEL_INFO, "master went offline, don't send him any more messages.");
             masterIsOnline = false;
