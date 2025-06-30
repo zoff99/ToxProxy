@@ -20,6 +20,15 @@ extern "C" {
 # define UNUSED(x) x
 #endif
 
+void my_custom_schema_upgrade_callback(uint32_t old_version, uint32_t new_version)
+{
+    printf("TEST: schema upgrade from %d to %d\n", old_version, new_version);
+    if (new_version == 1)
+    {
+        // HINT: do your schema upgrades here
+    }
+}
+
 int main()
 {
     printf("TEST: CSORMA version: %s\n", csorma_get_version());
@@ -29,6 +38,7 @@ int main()
     // ----------- initialize DB -----------
     const char *db_dir = "./";
     const char *db_filename = "example.db";
+    const uint32_t ORMA_TARGET_DB_SCHEMA = 1; // must start at "1". increase on every schema update.
     OrmaDatabase *o = OrmaDatabase_init((uint8_t*)db_dir,
             strlen(db_dir),
             (uint8_t*)db_filename, strlen(db_filename));
@@ -46,6 +56,9 @@ int main()
         CSORMA_GENERIC_RESULT res1 = OrmaDatabase_set_wal_mode(o, false);
         printf("TEST: disabling WAL mode. result = %d\n", (int)res1);
     }
+
+    OrmaDatabase_set_schema_upgrade_callback(my_custom_schema_upgrade_callback);
+    OrmaDatabase_do_schema_upgrade(o, ORMA_TARGET_DB_SCHEMA);
 
     // ----------- freehand SQL to create TABLE -----------
     char *sql1 = "CREATE TABLE IF NOT EXISTS \"Message\" ("

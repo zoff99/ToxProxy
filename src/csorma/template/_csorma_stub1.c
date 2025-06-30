@@ -8,6 +8,15 @@
 extern "C" {
 #endif
 
+void my_custom_schema_upgrade_callback(uint32_t old_version, uint32_t new_version)
+{
+    printf("STUB: schema upgrade from %d to %d\n", old_version, new_version);
+    if (new_version == 1)
+    {
+        // HINT: do your schema upgrades here
+    }
+}
+
 int main()
 {
     printf("STUB: CSORMA version: %s\n", csorma_get_version());
@@ -15,6 +24,7 @@ int main()
     printf("STUB: CSORMA sqlcipher version: %s\n", csorma_get_sqlcipher_version());
     const char *db_dir = "./";
     const char *db_filename = "stub.db";
+    const uint32_t ORMA_TARGET_DB_SCHEMA = 1; // must start at "1". increase on every schema update.
     OrmaDatabase *o = OrmaDatabase_init((uint8_t*)db_dir, strlen(db_dir), (uint8_t*)db_filename, strlen(db_filename));
 
 #ifdef ENCRYPT_CSORMA
@@ -32,3 +42,6 @@ int main()
     // HINT: set WAL mode for a performance increase
     CSORMA_GENERIC_RESULT res1 = OrmaDatabase_set_wal_mode(o, false);
     printf("STUB: disabling WAL mode. result = %d\n", (int)res1);
+
+    OrmaDatabase_set_schema_upgrade_callback(my_custom_schema_upgrade_callback);
+    OrmaDatabase_do_schema_upgrade(o, ORMA_TARGET_DB_SCHEMA);

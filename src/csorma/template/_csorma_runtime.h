@@ -31,6 +31,8 @@ typedef struct csorma_s {
     uint8_t* s;
 } csorma_s;
 
+typedef void OrmaDatabase_schema_upgrade_callback(uint32_t old_version, uint32_t new_version);
+
 csorma_s *csorma_str2_build(const char *b1);
 csorma_s *csorma_str_build(const char *b1, const uint32_t b1_len);
 csorma_s *csorma_str_con2(csorma_s *out, csorma_s *append);
@@ -46,11 +48,14 @@ const char *csorma_get_sqlcipher_version(void);
 OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t directory_name_len, 
                                 const uint8_t *file_name, const uint32_t file_name_len);
 int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len);
+void OrmaDatabase_set_schema_upgrade_callback(OrmaDatabase_schema_upgrade_callback *schema_upgrade_callback);
+void OrmaDatabase_do_schema_upgrade(const OrmaDatabase *o, uint32_t target_schema_version);
 
 CSORMA_GENERIC_RESULT OrmaDatabase_set_wal_mode(OrmaDatabase *o, const bool use_wal);
 void OrmaDatabase_shutdown(OrmaDatabase *o);
 
 CSORMA_GENERIC_RESULT OrmaDatabase_run_multi_sql(const OrmaDatabase *o, const uint8_t *sqltxt);
+int64_t OrmaDatabase_run_sql_int64(const OrmaDatabase *o, const uint8_t *sqltxt);
 
 typedef struct OrmaBindvars OrmaBindvars;
 

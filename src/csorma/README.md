@@ -19,6 +19,7 @@ https://github.com/zoff99/sorma2
 * safe Strings (UTF-8 or even broken UTF-8 or just random bytes)
 * easy to use (for most common SQL operations)
 * no dependencies (other than SQLite3 amalagamtion soure file)
+* schema update management
 * works with ASAN
 * works with TSAN
 * works with UBSAN

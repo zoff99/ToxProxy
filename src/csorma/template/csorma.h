@@ -21,13 +21,13 @@ extern "C" {
 // ----------- version -----------
 #define CSORMA_VERSION_MAJOR 0
 #define CSORMA_VERSION_MINOR 99
-#define CSORMA_VERSION_PATCH 3
+#define CSORMA_VERSION_PATCH 4
 #ifdef ENCRYPT_CSORMA
-static const char csorma_global_version_string[] = "0.99.3-SQLCIPHER";
-static const char csorma_global_version_asan_string[] = "0.99.3-SQLCIPHER-ASAN";
+static const char csorma_global_version_string[] = "0.99.4-SQLCIPHER";
+static const char csorma_global_version_asan_string[] = "0.99.4-SQLCIPHER-ASAN";
 #else
-static const char csorma_global_version_string[] = "0.99.3";
-static const char csorma_global_version_asan_string[] = "0.99.3-ASAN";
+static const char csorma_global_version_string[] = "0.99.4";
+static const char csorma_global_version_asan_string[] = "0.99.4-ASAN";
 #endif
 
 #define CSORMA__GIT_COMMIT_HASH "00000108"
@@ -95,6 +95,8 @@ typedef struct OrmaBindvars {
     OrmaBindvar* b;
 } OrmaBindvars;
 
+typedef void OrmaDatabase_schema_upgrade_callback(uint32_t old_version, uint32_t new_version);
+
 const char *csorma_get_version(void);
 const char *csorma_get_sqlite_version(void);
 const char *csorma_get_sqlcipher_version(void);
@@ -135,6 +137,8 @@ void add_to_orderby_asc_sql(csorma_s *sql_orderby, const char *column_name, cons
 OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t directory_name_len, 
                                 const uint8_t *file_name, const uint32_t file_name_len);
 int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len);
+void OrmaDatabase_set_schema_upgrade_callback(OrmaDatabase_schema_upgrade_callback *schema_upgrade_callback);
+void OrmaDatabase_do_schema_upgrade(const OrmaDatabase *o, uint32_t target_schema_version);
 
 void OrmaDatabase_lock_lastrowid_mutex(void);
 void OrmaDatabase_unlock_lastrowid_mutex(void);
@@ -143,6 +147,7 @@ CSORMA_GENERIC_RESULT OrmaDatabase_set_wal_mode(OrmaDatabase *o, const bool use_
 void OrmaDatabase_shutdown(OrmaDatabase *o);
 
 CSORMA_GENERIC_RESULT OrmaDatabase_run_multi_sql(const OrmaDatabase *o, const uint8_t *sqltxt);
+int64_t OrmaDatabase_run_sql_int64(const OrmaDatabase *o, const uint8_t *sqltxt);
 
 #ifdef __cplusplus
 }  // extern "C"
