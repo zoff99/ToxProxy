@@ -29,6 +29,7 @@ extern "C" {
 
 pthread_mutex_t __sorma_global_last_inserted_rowid___mutex;
 const char* BINDVAR_TYPE_NAME[] = { "Int", "Long", "String", "Boolean" };
+static OrmaDatabase_schema_upgrade_callback *OrmaDatabase_self_schema_upgrade_callback = NULL;
 
 csorma_s *csorma_str2_build(const char *b1)
 {
@@ -629,6 +630,125 @@ CSORMA_GENERIC_RESULT OrmaDatabase_run_multi_sql(const OrmaDatabase *o, const ui
     }
 
     return CSORMA_GENERIC_RESULT_ERROR;
+}
+
+
+int64_t OrmaDatabase_run_sql_int64(const OrmaDatabase *o, const uint8_t *sqltxt)
+{
+    int64_t result = 0;
+    sqlite3_stmt *res;
+    csorma_s *sql_txt = csorma_str2_build((const char *)sqltxt);
+    if (CSORMA_TRACE) { CSORMA_LOGGER_ALWAYS("%s", sql_txt->s); }
+
+    int rc = sqlite3_prepare_v2(o->db, (const char *)sql_txt->s, -1, &res, 0);
+    CSORMA_LOGGER_DEBUG("rc=%d", rc);
+    CSORMA_LOGGER_DEBUG("err=%s", sqlite3_errmsg(o->db));
+
+    if (rc != SQLITE_OK)
+    {
+        CSORMA_LOGGER_ERROR("execute err=%s", sqlite3_errmsg(o->db));
+    }
+
+    int step;
+    uint64_t row_count = 0;
+    while (1 == 1)
+    {
+        step = sqlite3_step(res);
+        CSORMA_LOGGER_DEBUG("step=%d", step);
+        if (step == SQLITE_ROW)
+        {
+            row_count++;
+            CSORMA_LOGGER_DEBUG("row found #%lu", row_count);
+            int result_colum_count = sqlite3_column_count(res);
+            CSORMA_LOGGER_DEBUG("result_colum_count=%d", result_colum_count);
+            result = sqlite3_column_int64(res, 0); // HINT: we get the first column, whatever the name
+        }
+        else if (step == SQLITE_BUSY)
+        {
+            continue;
+        }
+        else if (step == SQLITE_DONE)
+        {
+            CSORMA_LOGGER_DEBUG("select finished");
+            break;
+        }
+        else
+        {
+            CSORMA_LOGGER_ERROR("some error occured");
+            break;
+        }
+    }
+    CSORMA_LOGGER_DEBUG("sqlite3_finalize");
+    sqlite3_finalize(res);
+    csorma_str_free(sql_txt);
+    return result;
+}
+
+
+void OrmaDatabase_set_schema_upgrade_callback(OrmaDatabase_schema_upgrade_callback *schema_upgrade_callback)
+{
+    OrmaDatabase_self_schema_upgrade_callback = schema_upgrade_callback;
+}
+
+static uint32_t get_current_db_version(const OrmaDatabase *o)
+{
+    if (o == NULL)
+    {
+        CSORMA_LOGGER_ERROR("database struct is NULL");
+        return 0;
+    }
+    if (o->db == NULL)
+    {
+        CSORMA_LOGGER_DEBUG("database handle is NULL");
+        return 0;
+    }
+
+    uint32_t ret = 0;
+    int64_t cur_schema_version = OrmaDatabase_run_sql_int64(o, (const uint8_t *)"select db_version from orma_schema order by db_version desc limit 1;");
+    ret = (uint32_t)cur_schema_version; // we shrink it down here. TODO: look for a better solution in the future?
+    CSORMA_LOGGER_INFO("current db schema version is: %d", ret);
+    return ret;
+}
+
+static void create_orma_version_schema_table(const OrmaDatabase *o)
+{
+    // HINT: we are trying to be clever here to save us a check
+    OrmaDatabase_run_multi_sql(o, (const uint8_t *)"CREATE TABLE IF NOT EXISTS orma_schema (db_version INTEGER NOT NULL);");
+    OrmaDatabase_run_multi_sql(o, (const uint8_t *)"INSERT INTO orma_schema(db_version) SELECT 0 WHERE NOT EXISTS(SELECT 1 FROM orma_schema WHERE db_version > -1);");
+}
+
+static void set_new_db_version(const OrmaDatabase *o, int new_version)
+{
+    csorma_s *out = csorma_str2_build("update orma_schema set db_version='");
+    out = csorma_str_int32t(out, new_version);
+    const char *end_part = "';";
+    out = csorma_str_con(out, end_part, strlen(end_part));
+    OrmaDatabase_run_multi_sql(o, out->s);
+    csorma_str_free(out);
+}
+
+void OrmaDatabase_do_schema_upgrade(const OrmaDatabase *o, uint32_t target_schema_version)
+{
+    // HINT: we only create it, if its not already existing
+    create_orma_version_schema_table(o);
+    uint32_t THIS_DB_SCHEMA_VERSION = target_schema_version;
+    uint32_t current_db_schema_version = get_current_db_version(o);
+    if ((current_db_schema_version == 0) && (THIS_DB_SCHEMA_VERSION == 0))
+    {
+        CSORMA_LOGGER_WARNING("current_db_schema_version and THIS_DB_SCHEMA_VERSION are both 0, this is not allowed!");
+    }
+    if (current_db_schema_version < THIS_DB_SCHEMA_VERSION)
+    {
+        for (uint32_t cur=current_db_schema_version;cur<THIS_DB_SCHEMA_VERSION;cur++)
+        {
+            CSORMA_LOGGER_INFO("calling schema upgrade callback function for %d -> %d", (int)cur, (int)(cur + 1));
+            if (OrmaDatabase_self_schema_upgrade_callback != NULL)
+            {
+                OrmaDatabase_self_schema_upgrade_callback(cur, (cur + 1));
+            }
+        }
+    }
+    set_new_db_version(o, THIS_DB_SCHEMA_VERSION);
 }
 
 const char *csorma_get_sqlite_version(void)
