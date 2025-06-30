@@ -139,6 +139,8 @@ static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
 static const char *LOV_KEY_PUSHTOKEN = "PUSHTOKEN";
 
+const uint32_t ORMA_TARGET_DB_SCHEMA = 1; // must start at "1". increase on every schema update.
+
 #define NOTI__device_token_min_len 5
 #define NOTI__device_token_max_len 300
 
@@ -384,6 +386,144 @@ static void shutdown_db()
     dbg(LOGLEVEL_INFO, "shutting db DONE");
 }
 
+void my_custom_schema_upgrade_callback(uint32_t old_version, uint32_t new_version)
+{
+    printf("STUB: schema upgrade from %d to %d\n", old_version, new_version);
+    if (new_version == 1)
+    {
+        {
+        char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group\" ("
+        "      \"groupid\" TEXT,    "
+        "      \"is_silent\" BOOLEAN,    "
+        "      \"last_update_timestamp\" INTEGER,    "
+        "      PRIMARY KEY(\"groupid\")    "
+        "    );    "
+        ;
+        dbg(LOGLEVEL_INFO, "creating table: Group");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+        {
+        char *sql2 = "CREATE TABLE IF NOT EXISTS \"Friend\" ("
+        "      \"pubkey\" TEXT,    "
+        "      \"is_master\" BOOLEAN,    "
+        "      \"is_silent\" BOOLEAN,    "
+        "      \"last_update_timestamp\" INTEGER,    "
+        "      PRIMARY KEY(\"pubkey\")    "
+        "    );    "
+        ;
+        dbg(LOGLEVEL_INFO, "creating table: Friend");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+        {
+        char *sql2 = "CREATE TABLE IF NOT EXISTS \"Lov\" ("
+        "      \"key\" TEXT,    "
+        "      \"value\" TEXT,    "
+        "      PRIMARY KEY(\"key\")    "
+        "    );    "
+        ;
+        dbg(LOGLEVEL_INFO, "creating table: Lov");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+        {
+        char *sql2 = "CREATE TABLE IF NOT EXISTS \"Message\" ("
+        "  \"id\" INTEGER,"
+        "  \"pubkey\" TEXT,"
+        "  \"datahex\" TEXT,"
+        "  \"wrappeddatahex\" TEXT,"
+        "  \"message_id\" INTEGER,"
+        "  \"timstamp_recv\" INTEGER,"
+        "  \"message_hashid\" TEXT,"
+        "  \"message_sync_hashid\" TEXT,"
+        "  \"mtype\" INTEGER,"
+        "  PRIMARY KEY(\"id\" AUTOINCREMENT)"
+        ");"
+        ;
+        dbg(LOGLEVEL_INFO, "creating table: Message");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+
+        {
+        char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group_message\" ("
+        "  \"id\" INTEGER,"
+        "  \"groupid\" TEXT,"
+        "  \"peerpubkey\" TEXT,"
+        "  \"datahex\" TEXT,"
+        "  \"wrappeddatahex\" TEXT,"
+        "  \"message_id\" INTEGER,"
+        "  \"timstamp_recv\" INTEGER,"
+        "  \"message_hashid\" TEXT,"
+        "  \"message_sync_hashid\" TEXT,"
+        "  \"mtype\" INTEGER,"
+        "  PRIMARY KEY(\"id\" AUTOINCREMENT)"
+        ");"
+        ;
+        dbg(LOGLEVEL_INFO, "creating table: Group_message");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+        {
+        char *sql2 = "CREATE TABLE IF NOT EXISTS \"Self\" ("
+        "  \"toxid\" TEXT,"
+        "  \"master_pubkey\" TEXT,"
+        "  PRIMARY KEY(\"toxid\")"
+        ");"
+        ;
+        dbg(LOGLEVEL_INFO, "creating table: Self");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+
+        // -- update 0001 --
+        {
+        char *sql2 = "ALTER TABLE \"Friend\" ADD COLUMN last_update_timestamp INTEGER";
+        dbg(LOGLEVEL_INFO, "alter table: Friend");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+
+        {
+        char *sql2 = "ALTER TABLE \"Group\" ADD COLUMN last_update_timestamp INTEGER";
+        dbg(LOGLEVEL_INFO, "alter table: Group");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+
+        // =================================================================================
+        {
+        char *sql2 = "INSERT into \"Lov\" (key, value) values ('db_version', '1')";
+        dbg(LOGLEVEL_INFO, "db version: 1");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+        {
+        char *sql2 = "update \"Lov\" set value='1' where key='db_version'";
+        dbg(LOGLEVEL_INFO, "db version: 1");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+        // =================================================================================
+        // -- update 0001 --
+
+        {
+        char *sql2 = ""
+        "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Friend\" ON Friend (last_update_timestamp);"
+        "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Group\" ON Group (last_update_timestamp);"
+        "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Message\" ON Message (timstamp_recv);"
+        "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Group_message\" ON Group_message (timstamp_recv);"
+        "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Message\" ON Message (message_hashid);"
+        "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Group_message\" ON Group_message (message_hashid);"
+        ;
+        dbg(LOGLEVEL_INFO, "creating indexes");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+    }
+}
+
 static void create_db()
 {
     dbg(LOGLEVEL_INFO, "CSORMA version: %s", csorma_get_version());
@@ -392,137 +532,8 @@ static void create_db()
     const char *db_filename = dbfilename;
     o = OrmaDatabase_init((uint8_t*)db_dir, strlen(db_dir), (uint8_t*)db_filename, strlen(db_filename));
 
-
-    {
-    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group\" ("
-    "      \"groupid\" TEXT,    "
-    "      \"is_silent\" BOOLEAN,    "
-    "      \"last_update_timestamp\" INTEGER,    "
-    "      PRIMARY KEY(\"groupid\")    "
-    "    );    "
-    ;
-    dbg(LOGLEVEL_INFO, "creating table: Group");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-    {
-    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Friend\" ("
-    "      \"pubkey\" TEXT,    "
-    "      \"is_master\" BOOLEAN,    "
-    "      \"is_silent\" BOOLEAN,    "
-    "      \"last_update_timestamp\" INTEGER,    "
-    "      PRIMARY KEY(\"pubkey\")    "
-    "    );    "
-    ;
-    dbg(LOGLEVEL_INFO, "creating table: Friend");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-    {
-    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Lov\" ("
-    "      \"key\" TEXT,    "
-    "      \"value\" TEXT,    "
-    "      PRIMARY KEY(\"key\")    "
-    "    );    "
-    ;
-    dbg(LOGLEVEL_INFO, "creating table: Lov");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-    {
-    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Message\" ("
-    "  \"id\" INTEGER,"
-    "  \"pubkey\" TEXT,"
-    "  \"datahex\" TEXT,"
-    "  \"wrappeddatahex\" TEXT,"
-    "  \"message_id\" INTEGER,"
-    "  \"timstamp_recv\" INTEGER,"
-    "  \"message_hashid\" TEXT,"
-    "  \"message_sync_hashid\" TEXT,"
-    "  \"mtype\" INTEGER,"
-    "  PRIMARY KEY(\"id\" AUTOINCREMENT)"
-    ");"
-    ;
-    dbg(LOGLEVEL_INFO, "creating table: Message");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-
-    {
-    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Group_message\" ("
-    "  \"id\" INTEGER,"
-    "  \"groupid\" TEXT,"
-    "  \"peerpubkey\" TEXT,"
-    "  \"datahex\" TEXT,"
-    "  \"wrappeddatahex\" TEXT,"
-    "  \"message_id\" INTEGER,"
-    "  \"timstamp_recv\" INTEGER,"
-    "  \"message_hashid\" TEXT,"
-    "  \"message_sync_hashid\" TEXT,"
-    "  \"mtype\" INTEGER,"
-    "  PRIMARY KEY(\"id\" AUTOINCREMENT)"
-    ");"
-    ;
-    dbg(LOGLEVEL_INFO, "creating table: Group_message");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-    {
-    char *sql2 = "CREATE TABLE IF NOT EXISTS \"Self\" ("
-    "  \"toxid\" TEXT,"
-    "  \"master_pubkey\" TEXT,"
-    "  PRIMARY KEY(\"toxid\")"
-    ");"
-    ;
-    dbg(LOGLEVEL_INFO, "creating table: Self");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-
-    // -- update 0001 --
-    {
-    char *sql2 = "ALTER TABLE \"Friend\" ADD COLUMN last_update_timestamp INTEGER";
-    dbg(LOGLEVEL_INFO, "alter table: Friend");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-
-    {
-    char *sql2 = "ALTER TABLE \"Group\" ADD COLUMN last_update_timestamp INTEGER";
-    dbg(LOGLEVEL_INFO, "alter table: Group");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-
-    // =================================================================================
-    {
-    char *sql2 = "INSERT into \"Lov\" (key, value) values ('db_version', '1')";
-    dbg(LOGLEVEL_INFO, "db version: 1");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-    {
-    char *sql2 = "update \"Lov\" set value='1' where key='db_version'";
-    dbg(LOGLEVEL_INFO, "db version: 1");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
-    // =================================================================================
-    // -- update 0001 --
-
-    {
-    char *sql2 = ""
-    "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Friend\" ON Friend (last_update_timestamp);"
-    "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Group\" ON Group (last_update_timestamp);"
-    "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Message\" ON Message (timstamp_recv);"
-    "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Group_message\" ON Group_message (timstamp_recv);"
-    "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Message\" ON Message (message_hashid);"
-    "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Group_message\" ON Group_message (message_hashid);"
-    ;
-    dbg(LOGLEVEL_INFO, "creating indexes");
-    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
-    dbg(LOGLEVEL_INFO, "res1: %d", res1);
-    }
+    OrmaDatabase_set_schema_upgrade_callback(my_custom_schema_upgrade_callback);
+    OrmaDatabase_do_schema_upgrade(o, ORMA_TARGET_DB_SCHEMA);
 }
 
 static void add_group_to_db(const char *groupidhex, const uint32_t len)
