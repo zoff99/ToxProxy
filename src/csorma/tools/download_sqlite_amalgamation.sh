@@ -1,6 +1,6 @@
 #! /bin/bash
 
-_SQLITE_VERSION_="3500200"
+_SQLITE_VERSION_="3500300"
 
 amalgamation_url="https://sqlite.org/2025/sqlite-amalgamation-""$_SQLITE_VERSION_"".zip"
 
