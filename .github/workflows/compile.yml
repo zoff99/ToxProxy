@@ -62,7 +62,7 @@ jobs:
       - name: test
         run: ./dockcross-linux-riscv64 bash -c 'ls -al;id;pwd;hostname;uname -a'
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -93,7 +93,7 @@ jobs:
       - name: test
         run: ./dockcross-linux-arm64 bash -c 'ls -al;id;pwd;hostname;uname -a'
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -136,7 +136,7 @@ jobs:
           coreutils autoconf libtool pkg-config \
           libsodium-dev libcurl4-gnutls-dev
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -196,7 +196,7 @@ jobs:
           coreutils autoconf libtool pkg-config \
           libsodium-dev libcurl4-gnutls-dev
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -225,7 +225,7 @@ jobs:
       - name: install deps
         run:  brew install libsodium curl
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -254,7 +254,7 @@ jobs:
       - name: install deps
         run:  brew install libsodium curl
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -302,7 +302,7 @@ jobs:
       - name: check mingw
         run: dpkg -L gcc-mingw-w64-x86-64
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
