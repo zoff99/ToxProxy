@@ -107,11 +107,8 @@ STUB: CSORMA SQLite version: 3.46.1
 STUB: CSORMA sqlcipher version: 4.6.1 community
 STUB: setting sqlcipher key. result = 0
 STUB: disabling WAL mode. result = 0
-STUB: creating table: Message
-STUB: res1: 0
-STUB: creating table: Friendlist
-STUB: res1: 0
-STUB: creating table: Xx1
+STUB: schema upgrade from 0 to 1
+STUB: creating table: Person
 STUB: res1: 0
 
 STUB: all OK
