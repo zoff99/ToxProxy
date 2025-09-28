@@ -160,9 +160,11 @@ int main()
 #ifdef _TEST_INMEMORY_DB_
     const char *db_dir = ":memory:";
     const char *db_filename = "";
+    printf("TEST: test uses in-memory db\n");
 #else // test with regular db file
     const char *db_dir = "./";
     const char *db_filename = "test.db";
+    printf("TEST: test uses file db\n");
 #endif
     const uint32_t ORMA_TARGET_DB_SCHEMA = 1; // must start at "1". increase on every schema update.
 

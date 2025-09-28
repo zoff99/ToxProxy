@@ -102,6 +102,66 @@ jobs:
           cd project/gen/
           ./csorma_test
 
+  test_linux_asan_in_mem_db:
+    runs-on: ubuntu-22.04
+    needs: [update-nightly-tag]
+    if: |
+      always() &&
+      (needs.update-nightly-tag.result == 'success' ||
+        needs.update-nightly-tag.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install deps
+        run: |
+          sudo apt-get update && \
+          sudo DEBIAN_FRONTEND=noninteractive \
+          apt-get install -y --no-install-recommends \
+          fonts-freefont-otf \
+          ghostscript \
+          imagemagick
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: java-version
+        run: java -version
+
+      - name: generate code
+        run: |
+          javac csorma_generator.java  && java csorma_generator ./project/
+
+      - name: compile binary with ASAN
+        run: |
+          cd project/gen/
+          ls -al
+          export CFLAGS=" -D_TEST_INMEMORY_DB_ "
+          make -j 6 asan_all && make asan_tests
+
+      - name: check binary
+        run: |
+          cd project/gen/
+          ls -al
+          ldd csorma_test
+          ls -al csorma_test
+          ls -hal csorma_test
+
+      - name: debug
+        run: |
+          cd project/gen/
+          echo "==============="
+          cat -n Message.h
+          echo "==============="
+          cat -n Message.c
+          echo "==============="
+
+      - name: run test
+        run: |
+          cd project/gen/
+          ./csorma_test
+
   test_linux_asan:
     runs-on: ubuntu-22.04
     needs: [update-nightly-tag]

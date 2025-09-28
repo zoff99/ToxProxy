@@ -14,7 +14,7 @@ import java.util.stream.Stream;
 
 public class csorma_generator {
     private static final String TAG = "Generator";
-    static final String Version = "0.99.4";
+    static final String Version = "0.99.5";
     static final String out_dir = "gen/";
     static final String prefix = "_csorma_";
     static final String in_suffix = ".java";
@@ -30,6 +30,7 @@ public class csorma_generator {
     static final String tbl_c_proto = "_table.c";
     static final String tbl_stub_1 = "_csorma_stub1.c";
     static final String tbl_stub_2 = "_csorma_stub2.c";
+    static final String tbl_stub_3 = "_csorma_stub3.c";
     static final String tbl_stub_out = "csorma_stub.c";
     static final String tbl_fc_ext = ".c";
     static final String tbl_fh_ext = ".h";
@@ -162,6 +163,23 @@ public class csorma_generator {
                 }
             }
 
+            try
+            {
+                File d = new File(workdir + File.separator + out_dir);
+                d.mkdirs();
+                final String o1 = read_text_file(proto_dir + File.separator  + tbl_stub_2);
+                FileWriter fstream = new FileWriter(workdir + File.separator + out_dir + tbl_stub_out,
+                    StandardCharsets.UTF_8, true);
+                BufferedWriter out = new BufferedWriter(fstream);
+                out.write(o1);
+                out.newLine();
+                out.close();
+            }
+            catch(Exception e)
+            {
+                e.printStackTrace();
+            }
+
             finish_csorma(workdir);
 
             String[] list = new String[]{"csorma.c","csorma.h","logger.c","logger.h","csorma_example.c","csorma_test.c"};
@@ -290,7 +308,7 @@ public class csorma_generator {
         {
             File d = new File(workdir + File.separator + out_dir);
             d.mkdirs();
-            final String o1 = read_text_file(proto_dir + File.separator  + tbl_stub_2);
+            final String o1 = read_text_file(proto_dir + File.separator  + tbl_stub_3);
             FileWriter fstream = new FileWriter(workdir + File.separator + out_dir + tbl_stub_out,
                 StandardCharsets.UTF_8, true);
             BufferedWriter out = new BufferedWriter(fstream);
@@ -632,9 +650,9 @@ public class csorma_generator {
             FileWriter fstream = new FileWriter(workdir + File.separator + out_dir + tbl_stub_out,
                 StandardCharsets.UTF_8, true); // append!
             BufferedWriter out = new BufferedWriter(fstream);
-            out.write("    {");
+            out.write("        {");
             out.newLine();
-            out.write("    char *sql2 = \"");
+            out.write("        char *sql2 = \"");
             out.write(outstr.replace("\"", "\\\""));
             out.write("\"");
             out.newLine();
@@ -750,15 +768,15 @@ public class csorma_generator {
             FileWriter fstream = new FileWriter(workdir + File.separator + out_dir + tbl_stub_out,
                 StandardCharsets.UTF_8, true); // append!
             BufferedWriter out = new BufferedWriter(fstream);
-            out.write("    ;");
+            out.write("        ;");
             out.newLine();
-            out.write("    printf(\"STUB: creating table: " + tablename + "\\n\");");
+            out.write("        printf(\"STUB: creating table: " + tablename + "\\n\");");
             out.newLine();
-            out.write("    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);");
+            out.write("        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);");
             out.newLine();
-            out.write("    printf(\"STUB: res1: %d\\n\", res1);");
+            out.write("        printf(\"STUB: res1: %d\\n\", res1);");
             out.newLine();
-            out.write("    }");
+            out.write("        }");
             out.newLine();
             out.close();
         }
@@ -1193,9 +1211,9 @@ static __@@@TABLE@@@__ *_orderBy__@@@COLUMN_NAME@@@__Desc(__@@@TABLE@@@__ *t)
             FileWriter fstream = new FileWriter(workdir + File.separator + out_dir + tbl_stub_out,
                 StandardCharsets.UTF_8, true); // append!
             BufferedWriter out = new BufferedWriter(fstream);
-            out.write("    \"");
-            out.write("    "+txt_line.replace("\"", "\\\""));
-            out.write("    \"");
+            out.write("        \"");
+            out.write("        "+txt_line.replace("\"", "\\\""));
+            out.write("        \"");
             out.newLine();
             out.close();
         }
