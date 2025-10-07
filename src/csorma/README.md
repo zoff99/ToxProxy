@@ -255,6 +255,24 @@ OrmaDatabase *o = OrmaDatabase_init(
 );
 ```
 
+initialize an encrypted database (if csorma was compiled with encryption support):
+```C
+const char *db_dir = "./";
+const char *db_filename = "stub.db";
+OrmaDatabase *o = OrmaDatabase_init(
+    (uint8_t*)db_dir, strlen(db_dir),
+    (uint8_t*)db_filename, strlen(db_filename)
+);
+
+const char *key = "passphrase123!";
+int result_setkey = OrmaDatabase_key(o, (uint8_t*)key, strlen(key));
+printf("setting sqlcipher key. result = %d\n", result_setkey);
+
+// HINT: set WAL mode
+CSORMA_GENERIC_RESULT result_setwal = OrmaDatabase_set_wal_mode(o, true);
+printf("enabling WAL mode. result = %d\n", (int)result_setwal);
+```
+
 you can also initialize an in-memory database:
 ```C
 const char *db_dir = ":memory:";

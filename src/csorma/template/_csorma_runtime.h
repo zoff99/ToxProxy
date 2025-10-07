@@ -47,7 +47,19 @@ const char *csorma_get_sqlcipher_version(void);
 
 OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t directory_name_len, 
                                 const uint8_t *file_name, const uint32_t file_name_len);
+
+/*
+ * returns SQLITE_OK when setting the "key" was ok (this does NOT mean that the "key" was correct, just that the setting of it was OK)
+ *         CSORMA_GENERIC_RESULT_ERROR when csorma was not compiled with encryption
+ *         any other value when setting the "key" did NOT work
+ *
+ *         If you specify an incorrect key, you will not get an error message right away.
+ *         But the first time you try to access the database you will get an SQLITE_NOTADB error with a message
+ *         of "file is encrypted or is not a database".
+ *
+ */
 int OrmaDatabase_key(OrmaDatabase *o, const uint8_t *key, const uint32_t key_len);
+
 void OrmaDatabase_set_schema_upgrade_callback(OrmaDatabase_schema_upgrade_callback *schema_upgrade_callback);
 void OrmaDatabase_do_schema_upgrade(const OrmaDatabase *o, uint32_t target_schema_version);
 
