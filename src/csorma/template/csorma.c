@@ -782,7 +782,7 @@ const char *csorma_get_sqlcipher_version(void)
     //       so this is now updated by hand.
 
     // !! the hex code in the next line is used by the 'download_sqlcipher_amalgamation.sh' to find this line and update the version string !!
-    return "4.10.0 community"; // DO NOT REMOVE THIS: 0x0ffca123459837347ca6c5a8
+    return "4.11.0 community"; // DO NOT REMOVE THIS: 0x0ffca123459837347ca6c5a8
 #else
     return "0.0.0";
 #endif
