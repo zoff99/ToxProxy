@@ -102,6 +102,21 @@ jobs:
           cd project/gen/
           ./csorma_test
 
+      - name: show beginning of the DB file
+        run: |
+          cd project/gen/
+          cat test.db|hexdump -C|head -24
+
+      - name: check if DB is really encrypted
+        run: |
+          cd project/gen/
+          err=$(cat test.db|hexdump -C|head -24|grep "SQLite"||echo "")
+          if [ "$err""x" != "x" ]; then
+            echo "Database may not be encrypted !"
+            exit 1
+          fi
+
+
   test_linux_asan_in_mem_db:
     runs-on: ubuntu-22.04
     needs: [update-nightly-tag]
@@ -389,7 +404,7 @@ jobs:
           ./csorma_test
 
   test_macos:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v5
 
@@ -439,6 +454,7 @@ jobs:
         run: |
           cd project/gen/
           ./csorma_test && ./csorma_example
+
   test_macos14arm:
     runs-on: macos-14
     steps:
@@ -487,6 +503,7 @@ jobs:
         run: |
           cd project/gen/
           ./csorma_test && ./csorma_example
+
   test_wine:
     runs-on: ubuntu-22.04
     steps:
