@@ -12,7 +12,7 @@ jobs:
     permissions:
         contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Move nightly tag to head for nightly release
         run: git tag -f nightly && git push origin nightly -f
 
@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: build appimage
         run: cd .localrun ; ./appimage_it.sh
@@ -54,7 +54,7 @@ jobs:
   test_riscv64:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: make script dockcross-linux-riscv64
         run: docker run --rm dockcross/linux-riscv64 > ./dockcross-linux-riscv64; chmod +x ./dockcross-linux-riscv64
@@ -85,7 +85,7 @@ jobs:
   test_raspi:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: make script dockcross-linux-arm64
         run: docker run --rm dockcross/linux-arm64 > ./dockcross-linux-arm64; chmod +x ./dockcross-linux-arm64
@@ -125,7 +125,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: install deps
         run: |
@@ -185,7 +185,7 @@ jobs:
   test_linux:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: install deps
         run: |
@@ -220,7 +220,7 @@ jobs:
   test_macos:
     runs-on: macos-13
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: install deps
         run:  brew install libsodium curl
@@ -249,7 +249,7 @@ jobs:
   test_macos14arm:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: install deps
         run:  brew install libsodium curl
@@ -285,7 +285,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: install dependencies
         run: |
