@@ -21,12 +21,12 @@ https://github.com/zoff99/sorma2
 * Thread safe
 * safe Strings (UTF-8 or even broken UTF-8 or just random bytes)
 * easy to use (for most common SQL operations)
-* no dependencies (other than SQLite3 amalagamtion soure file)
+* no dependencies (other than SQLite3 amalgamtion source file)
 * schema update management
 * works with ASAN
 * works with TSAN
 * works with UBSAN
-* <b>sqlcipher</b> encryption option (you need to have openssl and libssl and libcrypto installed)
+* <b>sqlcipher</b> encryption option (you need to have openssl (libssl and libcrypto) installed)
 
 ### What is does NOT do
 * NOT optimized for speed
