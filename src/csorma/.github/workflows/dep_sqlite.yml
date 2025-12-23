@@ -32,7 +32,7 @@ jobs:
       run:  git diff || echo "no changes"
 
     - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v7
+      uses: peter-evans/create-pull-request@v8
       with:
         commit-message: update sqlite
         branch: create-pull-request/sqlite
