@@ -163,7 +163,7 @@ jobs:
           cp -v ./src/ToxProxy ToxProxy_linux_nightly
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ToxProxy_linux_nightly
           path: ToxProxy_linux_nightly
@@ -411,7 +411,7 @@ jobs:
           cp -v ./src/ToxProxy.exe ToxProxy_win_nightly.exe
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ToxProxy_win_nightly.exe
           path: ToxProxy_win_nightly.exe
