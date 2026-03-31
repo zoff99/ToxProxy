@@ -2,6 +2,25 @@
 
 ### Offline Messages for Tox
 
+ToxProxy provides offline message relay functionality for the Tox messaging protocol, acting as a persistent proxy that buffers messages when your primary device is offline and delivers them when you reconnect.<br>
+
+ToxProxy is designed to run continuously on a server or always-on device, configured to accept control commands only from a specific Master device's public key.<br>
+
+#### Key Features
+
+- **Message Buffering**: Stores messages when your "Master" device (typically a mobile phone) is offline
+- **Push Notifications**: Can wake up your Master device when new messages arrive via configurable push servers
+- **Cross-Platform**: Builds on Linux, macOS, and Windows (via cross-compilation)
+- **SQLite Storage**: Uses a custom C ORM (csorma) for persistent message storage
+
+#### Technical Stack
+
+- **Core**: C implementation using toxcore amalgamation for Tox protocol support
+- **Dependencies**: libsodium (encryption), libcurl (push notifications), pthread (threading)
+- **Database**: SQLite with custom csorma ORM for schema management
+- **Build**: Requires openjdk-17-jdk for code generation during build process
+<br>
+
 [![Liberapay](https://img.shields.io/liberapay/goal/zoff.svg?logo=liberapay)](https://liberapay.com/zoff/donate)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/zoff99/ToxProxy)
 
