@@ -38,6 +38,11 @@ jobs:
         run: |
           cp -v ./.localrun/*_appimage/artefacts/ToxProxy_x86_64.AppImage ToxProxy_x86_64.AppImage
 
+      - name: Rename artifact for release upload
+        if: contains(github.ref, 'refs/tags/v')
+        run: |
+          cp -v ./.localrun/*_appimage/artefacts/ToxProxy_x86_64.AppImage ToxProxy_x86_64.AppImage
+
       - name: Upload to versioned release
         if: contains(github.ref, 'refs/tags/v')
         uses: ncipollo/release-action@v1
