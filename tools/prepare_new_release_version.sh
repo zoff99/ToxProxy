@@ -44,7 +44,7 @@ commit_message="new version ""$next_m_version"
 tag_name="$next_m_version"
 
 git commit -m "$commit_message" "$f1"
-git tag -a "$tag_name" -m "$tag_name"
+git tag -a 'v'"$tag_name" -m "$tag_name"
 
 
 
