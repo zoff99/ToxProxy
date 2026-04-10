@@ -34,7 +34,7 @@ v_minor=$(echo "$next_m_version" | cut -d. -f2)
 v_patchlevel=$(echo "$next_m_version" | cut -d. -f3)
 
 sed -i -E 's/(global_version_string\[\] = ")[^-]*(-ASAN";)/\1'"$next_m_version"'\2/' "$f1"
-sed -i "s/\(global_version_string\[\] = \"\)[^\"]*/\1$next_m_version/" "$f1"
+sed -i -E 's/(global_version_string\[\] = ")[^-]*(";)/\1'"$next_m_version"'\2/' "$f1"
 
 sed -i -e 's#define VERSION_MAJOR .*$#define VERSION_MAJOR '"$v_major"'#' "$f1"
 sed -i -e 's#define VERSION_MINOR .*$#define VERSION_MINOR '"$v_minor"'#' "$f1"
