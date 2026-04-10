@@ -38,6 +38,15 @@ jobs:
         run: |
           cp -v ./.localrun/*_appimage/artefacts/ToxProxy_x86_64.AppImage ToxProxy_x86_64.AppImage
 
+      - name: Upload to versioned release
+        if: contains(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "ToxProxy_x86_64.AppImage"
+
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/zoff99/tweaks_001'
@@ -167,6 +176,20 @@ jobs:
         with:
           name: ToxProxy_linux_nightly
           path: ToxProxy_linux_nightly
+
+      - name: Rename artifact for release upload
+        if: contains(github.ref, 'refs/tags/v')
+        run: |
+          cp -v ./src/ToxProxy ToxProxy_linux
+
+      - name: Upload to versioned release
+        if: contains(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "ToxProxy_linux"
 
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
@@ -415,6 +438,20 @@ jobs:
         with:
           name: ToxProxy_win_nightly.exe
           path: ToxProxy_win_nightly.exe
+
+      - name: Rename artifact for release upload
+        if: contains(github.ref, 'refs/tags/v')
+        run: |
+          cp -v ./src/ToxProxy.exe ToxProxy_win.exe
+
+      - name: Upload to versioned release
+        if: contains(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "ToxProxy_win.exe"
 
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
