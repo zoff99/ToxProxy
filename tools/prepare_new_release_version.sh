@@ -41,10 +41,10 @@ sed -i -e 's#define VERSION_MINOR .*$#define VERSION_MINOR '"$v_minor"'#' "$f1"
 sed -i -e 's#define VERSION_PATCH .*$#define VERSION_PATCH '"$v_patchlevel"'#' "$f1"
 
 commit_message="new version ""$next_m_version"
-tag_name="$next_m_version"
+tag_name='v'"$next_m_version"
 
 git commit -m "$commit_message" "$f1"
-git tag -a 'v'"$tag_name" -m "$tag_name"
+git tag -a "$tag_name" -m "$tag_name"
 
 
 
