@@ -2144,6 +2144,12 @@ static void *notification_thread_func(void *UNUSED(data))
                                 curl_easy_setopt(curl, CURLOPT_URL, buf);
                                 curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0");
 
+                                struct curl_slist *headers_list = NULL;
+                                // add webpush needed headers
+                                headers_list = curl_slist_append(headers_list, "TTL: 18000"); // 5 hours in seconds
+                                headers_list = curl_slist_append(headers_list, "Content-Encoding: aes128gcm");
+                                curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers_list);
+
                                 dbg(LOGLEVEL_DEBUG, "request=%s", buf);
 
                                 curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_writefunc);
@@ -2179,6 +2185,7 @@ static void *notification_thread_func(void *UNUSED(data))
                                     s.ptr = NULL;
                                 }
 
+                                curl_slist_free_all(headers_list);
                                 curl_easy_cleanup(curl);
                             }
 
