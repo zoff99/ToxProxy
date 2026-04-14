@@ -1,6 +1,6 @@
 #! /bin/bash
 
-_SQLITE_VERSION_="3520000"
+_SQLITE_VERSION_="3530000"
 
 current_year=$(date +%Y 2>/dev/null)
 amalgamation_url="https://sqlite.org/""$current_year""/sqlite-amalgamation-""$_SQLITE_VERSION_"".zip"
