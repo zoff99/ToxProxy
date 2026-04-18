@@ -283,6 +283,12 @@ void openLogFile()
     logfile = fopen(log_filename, "wb");
 #endif
 
+    if (!logfile)
+    {
+        printf("Could not write to logfile directory\n");
+        exit(-2);
+    }
+
     setvbuf(logfile, NULL, _IOLBF,
             0); // Line buffered, (default is fully buffered) so every logline is instantly visible (and doesn't vanish in a crash situation)
 }
@@ -1301,6 +1307,7 @@ static void leave_old_groups(Tox *tox)
         dbg(LOGLEVEL_INFO, "deleted groups (affected rows): %d", (int)affected_rows2);
     }
 }
+
 
 static void leave_old_friends(Tox *tox)
 {
@@ -2536,8 +2543,39 @@ static void all_groups_peer_name(const Tox *tox)
     free(grouplist);
 }
 
+void check_current_directory_writeable()
+{
+
+#if defined(_WIN32) || defined(__MINGW32__)
+    #include <io.h>    // Required for MinGW and Windows
+    /* MinGW often defines R_OK/W_OK, but we define them if missing */
+    #ifndef R_OK
+        #define R_OK 4
+    #endif
+    #ifndef W_OK
+        #define W_OK 2
+    #endif
+#endif
+
+    const char *dir_path = ".";
+    if (access(dir_path, R_OK) == 0) {
+        printf("Current directory is readable\n");
+    } else {
+        printf("Read access denied on current directory\n");
+        exit(-3);
+    }
+
+    if (access(dir_path, W_OK) == 0) {
+        printf("Current directory is writable\n");
+    } else {
+        printf("Write access denied on current directory\n");
+        exit(-4);
+    }
+}
+
 int main(int argc, char *argv[])
 {
+    check_current_directory_writeable();
     openLogFile();
 
     // ---- test ASAN ----
