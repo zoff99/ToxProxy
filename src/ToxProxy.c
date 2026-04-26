@@ -28,11 +28,11 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 // ----------- version -----------
 #define VERSION_MAJOR 2
 #define VERSION_MINOR 1
-#define VERSION_PATCH 0
+#define VERSION_PATCH 1
 #if defined(__SANITIZE_ADDRESS__)
-    static const char global_version_string[] = "2.1.0-ASAN";
+    static const char global_version_string[] = "2.1.1-ASAN";
 #else
-    static const char global_version_string[] = "2.1.0";
+    static const char global_version_string[] = "2.1.1";
 #endif
 
 // ----------- version -----------
