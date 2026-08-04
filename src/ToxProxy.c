@@ -139,7 +139,7 @@ static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
 static const char *LOV_KEY_PUSHTOKEN = "PUSHTOKEN";
 
-const uint32_t ORMA_TARGET_DB_SCHEMA = 1; // must start at "1". increase on every schema update.
+const uint32_t ORMA_TARGET_DB_SCHEMA = 2; // must start at "1". increase on every schema update.
 
 #define NOTI__device_token_min_len 5
 #define NOTI__device_token_max_len 300
@@ -483,20 +483,27 @@ void my_custom_schema_upgrade_callback(uint32_t old_version, uint32_t new_versio
         dbg(LOGLEVEL_INFO, "res1: %d", res1);
         }
 
+        /* done already above
+        /* done already above
+        /* done already above
         // -- update 0001 --
         {
-        char *sql2 = "ALTER TABLE \"Friend\" ADD COLUMN last_update_timestamp INTEGER";
+        char *sql2 = "ALTER TABLE \"Friend\" ADD COLUMN last_update_timestamp INTEGER;";
         dbg(LOGLEVEL_INFO, "alter table: Friend");
         CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
         dbg(LOGLEVEL_INFO, "res1: %d", res1);
         }
 
         {
-        char *sql2 = "ALTER TABLE \"Group\" ADD COLUMN last_update_timestamp INTEGER";
+        char *sql2 = "ALTER TABLE \"Group\" ADD COLUMN last_update_timestamp INTEGER;";
         dbg(LOGLEVEL_INFO, "alter table: Group");
         CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
         dbg(LOGLEVEL_INFO, "res1: %d", res1);
         }
+        // done already above
+        // done already above
+        // done already above
+        */
 
         // =================================================================================
         {
@@ -514,16 +521,36 @@ void my_custom_schema_upgrade_callback(uint32_t old_version, uint32_t new_versio
         // =================================================================================
         // -- update 0001 --
 
+
         {
         char *sql2 = ""
         "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Friend\" ON Friend (last_update_timestamp);"
-        "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Group\" ON Group (last_update_timestamp);"
         "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Message\" ON Message (timstamp_recv);"
         "CREATE INDEX IF NOT EXISTS \"index_timstamp_recv_on_Group_message\" ON Group_message (timstamp_recv);"
         "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Message\" ON Message (message_hashid);"
         "CREATE INDEX IF NOT EXISTS \"index_message_hashid_on_Group_message\" ON Group_message (message_hashid);"
+        "CREATE INDEX IF NOT EXISTS \"index_last_update_timestamp_on_Group\" ON \"Group\" (last_update_timestamp);"
         ;
         dbg(LOGLEVEL_INFO, "creating indexes");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+    }
+    else if (new_version == 2)
+    {
+        {
+        char *sql2 = ""
+        "ALTER TABLE \"Group\" ADD COLUMN missed_sync_count INTEGER DEFAULT '0';"
+        "ALTER TABLE \"Group\" ADD COLUMN sync_seen INTEGER DEFAULT '0';"
+        ;
+        dbg(LOGLEVEL_INFO, "alter table: Group");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+
+        {
+        char *sql2 = "update \"Lov\" set value='2' where key='db_version'";
+        dbg(LOGLEVEL_INFO, "db version: 2");
         CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
         dbg(LOGLEVEL_INFO, "res1: %d", res1);
         }
