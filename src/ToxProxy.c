@@ -212,6 +212,15 @@ uint32_t my_last_online_ts = 0;
 #define BOOTSTRAP_AFTER_OFFLINE_SECS 30
 TOX_CONNECTION my_connection_status = TOX_CONNECTION_NONE;
 
+#define SYNC_TIMEOUT_SEC 3
+typedef enum {
+    SYNC_IDLE,
+    SYNC_RECEIVING
+} SyncState;
+
+SyncState g_sync_state = SYNC_IDLE;
+time_t g_last_received_time = 0;
+
 #define STALE_TIME_SECS (24 * 3600) // 24 hours in seconds
 
 #define TWO_HOURS_IN_MILLIS (2 * 3600 * 1000) // 2 hours in millis
@@ -240,6 +249,7 @@ OrmaDatabase *o = NULL;
 
 // functions defs ------------
 int ping_push_service();
+void on_group_id_received(const char *groupidhex);
 // functions defs ------------
 
 
@@ -581,6 +591,21 @@ static void add_group_to_db(const char *groupidhex, const uint32_t len)
         dbg(LOGLEVEL_INFO, "added group to db, inserted id: %lld", (long long)inserted_id);
     }
     orma_free_Group(g);
+}
+
+static void update_all_groups_sync_seen_zero_in_db()
+{
+    Group *g = orma_updateGroup(o->db);
+    int64_t affected_rows3 = g->sync_seenSet(g, (int32_t)0)->execute(g);
+    dbg(LOGLEVEL_INFO,"update_all_groups_sync_seen_zero_in_db: affected rows: %d", (int)affected_rows3);
+}
+
+static void update_group_sync_seen_in_db(const char *groupidhex, const uint32_t len)
+{
+    Group *g = orma_updateGroup(o->db);
+    int64_t affected_rows3 = g->sync_seenSet(g, (int32_t)1)->
+        groupidEq(g, csc(groupidhex, len))->execute(g);
+    dbg(LOGLEVEL_INFO,"update_group_sync_seen_in_db: affected rows: %d", (int)affected_rows3);
 }
 
 static void update_group_timestamp_in_db(const char *groupidhex, const uint32_t len, const uint32_t ts)
@@ -1100,7 +1125,7 @@ void add_master(const char *public_key_hex)
     }
 }
 
-void migrate_legay_masterfile()
+void migrate_legacy_masterfile()
 {
     if (!file_exists(legacy_masterpubkey_filename))
     {
@@ -1960,6 +1985,9 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         bin2upHex(public_key, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
         update_group_timestamp_in_db(public_key_hex, tox_public_key_hex_size_without_null_termin, timestamp_now());
         dbg(LOGLEVEL_DEBUG, "update group timestamp of groupid: %s", public_key_hex);
+        on_group_id_received(public_key_hex);
+        dbg(LOGLEVEL_DEBUG, "on_group_id_received for groupid: %s", public_key_hex);
+
     } else if (data[0] == 170) {
         // toxutil.c CAP_PACKET_ID
     } else {
@@ -2600,6 +2628,129 @@ void check_current_directory_writeable()
     }
 }
 
+
+
+
+
+
+
+void db_prepare_new_sync(void)
+{
+    // Reset the "seen" flag for all groups before the stream starts
+    update_all_groups_sync_seen_zero_in_db();
+}
+
+void db_mark_group_as_seen(const char *groupidhex)
+{
+    // Mark the group as present in this specific sync session
+    update_group_sync_seen_in_db(groupidhex, tox_public_key_hex_size_without_null_termin);
+}
+
+void db_process_old_sync_items(Tox *tox)
+{
+    /*
+       This runs when a sync finishes successfully.
+
+       1. Increment the missed counter for anything NOT seen this time.
+       SQL: UPDATE group SET missed_sync_count = missed_sync_count + 1 WHERE sync_seen = 0;
+
+       2. Reset the missed counter to 0 for anything that WAS seen this time.
+       SQL: UPDATE group SET missed_sync_count = 0 WHERE sync_seen = 1;
+
+       3. Delete any groups that have missed the last 2 consecutive syncs.
+       SQL: DELETE FROM group WHERE missed_sync_count >= 2;
+    */
+    {
+    char *sql2 = "UPDATE \"Group\" SET missed_sync_count = missed_sync_count + 1 WHERE sync_seen = '0';";
+    dbg(LOGLEVEL_INFO, "UPDATE \"Group\" SET missed_sync_count = missed_sync_count + 1 WHERE sync_seen = '0'");
+    CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+    dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
+
+    {
+    Group *g = orma_updateGroup(o->db);
+    int64_t affected_rows3 = g->missed_sync_countSet(g, (int32_t)0)->sync_seenEq(g, (int32_t)1)->execute(g);
+    dbg(LOGLEVEL_INFO,"missed_sync_countSet: affected rows: %d", (int)affected_rows3);
+    }
+
+    Group *p = orma_selectFromGroup(o->db);
+    GroupList *pl = p->missed_sync_countGe(p, (int32_t)2)->orderBygroupidAsc(p)->toList(p);
+    dbg(LOGLEVEL_INFO, "should leave group: pl->items=%lld", (long long)pl->items);
+    Group **pd = pl->l;
+    for(int i=0;i<pl->items;i++)
+    {
+        uint8_t public_key_bin[tox_public_key_size()];
+        H2B((*pd)->groupid->s, public_key_bin);
+
+        Tox_Err_Group_State_Queries err1;
+        uint32_t group_number = tox_group_by_chat_id(tox, public_key_bin, &err1);
+
+        dbg(LOGLEVEL_INFO, "trying to leave old group: %s res=%d gnum=%d", (*pd)->groupid->s, (int)err1, (int)group_number);
+
+        if ((err1 == TOX_ERR_GROUP_STATE_QUERIES_OK) && (group_number != UINT32_MAX))
+        {
+            // leave old group
+            tox_group_leave(tox, group_number, (const uint8_t *)"", 0, NULL);
+            dbg(LOGLEVEL_INFO, "leave old group: %s", (*pd)->groupid->s);
+            updateToxSavedata(tox);
+        }
+        pd++;
+    }
+    orma_free_GroupList(pl);
+
+    {
+        Group *p = orma_deleteFromGroup(o->db);
+        int64_t affected_rows2 = p->missed_sync_countGe(p, (int32_t)2)->execute(p);
+        dbg(LOGLEVEL_INFO, "have deleted groups (affected rows): %d", (int)affected_rows2);
+    }
+}
+
+// --- Network Callback ---
+void on_group_id_received(const char *groupidhex)
+{
+    if (g_sync_state == SYNC_IDLE)
+    {
+        g_sync_state = SYNC_RECEIVING;
+        db_prepare_new_sync();
+    }
+
+    db_mark_group_as_seen(groupidhex);
+    g_last_received_time = time(NULL);
+}
+
+// --- Main Loop Logic ---
+void check_sync_timeout(Tox *tox)
+{
+    if (g_sync_state != SYNC_RECEIVING)
+    {
+        return;
+    }
+
+    time_t now = time(NULL);
+
+    // If the partner stops sending IDs for 3 seconds, the sync is over
+    if (now - g_last_received_time >= SYNC_TIMEOUT_SEC)
+    {
+        // Execute the 2-strike aging logic
+        db_process_old_sync_items(tox);
+        g_sync_state = SYNC_IDLE;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 int main(int argc, char *argv[])
 {
     check_current_directory_writeable();
@@ -2783,7 +2934,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    migrate_legay_masterfile();
+    migrate_legacy_masterfile();
 
 /*
     // ######## DEBUG ########
@@ -3028,6 +3179,8 @@ int main(int argc, char *argv[])
                 my_last_online_ts = (uint32_t)get_unix_time();
             }
         }
+
+        check_sync_timeout(tox);
 
     }
 
