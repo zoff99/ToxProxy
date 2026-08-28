@@ -139,7 +139,7 @@ static char *NOTIFICATION__device_token = NULL;
 static const char *NOTIFICATION_GOTIFY_UP_PREFIX = "https://";
 static const char *LOV_KEY_PUSHTOKEN = "PUSHTOKEN";
 
-const uint32_t ORMA_TARGET_DB_SCHEMA = 2; // must start at "1". increase on every schema update.
+const uint32_t ORMA_TARGET_DB_SCHEMA = 3; // must start at "1". increase on every schema update.
 
 #define NOTI__device_token_min_len 5
 #define NOTI__device_token_max_len 300
@@ -565,6 +565,26 @@ void my_custom_schema_upgrade_callback(uint32_t old_version, uint32_t new_versio
         dbg(LOGLEVEL_INFO, "res1: %d", res1);
         }
     }
+    else if (new_version == 3)
+    {
+        {
+        char *sql2 = ""
+        "ALTER TABLE \"Friend\" ADD COLUMN missed_sync_count INTEGER DEFAULT '0';"
+        "ALTER TABLE \"Friend\" ADD COLUMN sync_seen INTEGER DEFAULT '0';"
+        ;
+        dbg(LOGLEVEL_INFO, "alter table: Friend");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+
+        {
+        char *sql2 = "update \"Lov\" set value='3' where key='db_version'";
+        dbg(LOGLEVEL_INFO, "db version: 3");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+        }
+
+    }
 }
 
 static void create_db()
@@ -577,6 +597,27 @@ static void create_db()
 
     OrmaDatabase_set_schema_upgrade_callback(my_custom_schema_upgrade_callback);
     OrmaDatabase_do_schema_upgrade(o, ORMA_TARGET_DB_SCHEMA);
+}
+
+static void update_all_friends_sync_seen_zero_in_db()
+{
+    Friend *f = orma_updateFriend(o->db);
+    int64_t affected_rows = f->sync_seenSet(f, (int32_t)0)->execute(f);
+    dbg(LOGLEVEL_INFO,"update_all_friends_sync_seen_zero_in_db: affected rows: %d", (int)affected_rows);
+}
+
+static void update_friend_sync_seen_in_db(const char *pubkeyhex, const uint32_t len)
+{
+    Friend *f = orma_updateFriend(o->db);
+    int64_t affected_rows = f->sync_seenSet(f, (int32_t)1)->
+        pubkeyEq(f, csc(pubkeyhex, len))->execute(f);
+    dbg(LOGLEVEL_INFO,"update_friend_sync_seen_in_db: affected rows: %d", (int)affected_rows);
+}
+
+void db_mark_friend_as_seen(const char *pubkeyhex)
+{
+    // Mark the friend as present in this specific sync session
+    update_friend_sync_seen_in_db(pubkeyhex, tox_public_key_hex_size_without_null_termin);
 }
 
 static void add_group_to_db(const char *groupidhex, const uint32_t len)
@@ -1973,6 +2014,10 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         bin2upHex(public_key, tox_public_key_size(), public_key_hex, tox_public_key_hex_size);
         update_friend_timestamp_in_db(public_key_hex, tox_public_key_hex_size_without_null_termin, timestamp_now());
         dbg(LOGLEVEL_DEBUG, "added friend of my master (norequest) with pubkey: %s", public_key_hex);
+        // Mark this friend as seen in the current sync session
+        db_mark_friend_as_seen(friend_pubkey_hex);
+        dbg(LOGLEVEL_DEBUG, "db_mark_friend_as_seen for friend: %s", friend_pubkey_hex);
+
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_GROUP_ID_FOR_PROXY) {
         if (length != (TOX_GROUP_CHAT_ID_SIZE) + 1) {
             dbg(LOGLEVEL_WARN, "received ControlProxyMessageType_groupId message with wrong size");
@@ -2636,8 +2681,9 @@ void check_current_directory_writeable()
 
 void db_prepare_new_sync(void)
 {
-    // Reset the "seen" flag for all groups before the stream starts
+    // Reset the "seen" flag for all groups and friends before the stream starts
     update_all_groups_sync_seen_zero_in_db();
+    update_all_friends_sync_seen_zero_in_db();
 }
 
 void db_mark_group_as_seen(const char *groupidhex)
@@ -2703,6 +2749,58 @@ void db_process_old_sync_items(Tox *tox)
         int64_t affected_rows2 = p->missed_sync_countGe(p, (int32_t)2)->execute(p);
         dbg(LOGLEVEL_INFO, "have deleted groups (affected rows): %d", (int)affected_rows2);
     }
+
+
+    // --- FRIEND SYNC AGING LOGIC ---
+    {
+        // Increment missed counter for friends NOT seen this time (exclude master)
+        char *sql2 = "UPDATE \"Friend\" SET missed_sync_count = missed_sync_count + 1 WHERE sync_seen = '0' AND is_master = '0';";
+        dbg(LOGLEVEL_INFO, "UPDATE \"Friend\" SET missed_sync_count = missed_sync_count + 1 WHERE sync_seen = '0' AND is_master = '0'");
+        CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
+        dbg(LOGLEVEL_INFO, "res1: %d", res1);
+    }
+
+    {
+        // Reset missed counter to 0 for friends that WAS seen this time (exclude master)
+        Friend *f = orma_updateFriend(o->db);
+        int64_t affected_rows3 = f->missed_sync_countSet(f, (int32_t)0)->sync_seenEq(f, (int32_t)1)->is_masterEq(f, (int32_t)0)->execute(f);
+        dbg(LOGLEVEL_INFO,"friend missed_sync_countSet: affected rows: %d", (int)affected_rows3);
+    }
+
+    // Find friends that have missed >= 2 consecutive syncs
+    Friend *p = orma_selectFromFriend(o->db);
+    FriendList *pl = p->missed_sync_countGe(p, (int32_t)2)->is_masterEq(p, (int32_t)0)->orderBypubkeyAsc(p)->toList(p);
+    dbg(LOGLEVEL_INFO, "should leave old friend: pl->items=%lld", (long long)pl->items);
+    Friend **pd = pl->l;
+    for(int i=0;i<pl->items;i++)
+    {
+        uint8_t public_key_bin[tox_public_key_size()];
+        H2B((*pd)->pubkey->s, public_key_bin);
+
+        Tox_Err_Friend_By_Public_Key err1;
+        uint32_t friend_number = tox_friend_by_public_key(tox, public_key_bin, &err1);
+
+        dbg(LOGLEVEL_INFO, "trying to leave old friend: %s res=%d fnum=%d", (*pd)->pubkey->s, (int)err1, (int)friend_number);
+
+        if ((err1 == TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK) && (friend_number != UINT32_MAX))
+        {
+            // leave old friend
+            tox_friend_delete(tox, friend_number, NULL);
+            dbg(LOGLEVEL_INFO, "leave old friend: %s", (*pd)->pubkey->s);
+            updateToxSavedata(tox);
+            check_if_master_is_friend_zero(tox);
+        }
+
+        if ((*pd)->pubkey->l > 2) // sanity check, pubkey hex string should be at least 2 char long
+        {
+            Friend *f_del = orma_deleteFromFriend(o->db);
+            int64_t affected_rows2 = f_del->pubkeyEq(f_del, (*pd)->pubkey)->execute(f_del);
+            dbg(LOGLEVEL_INFO, "have deleted friend from db (affected rows): %d", (int)affected_rows2);
+        }
+        pd++;
+    }
+    orma_free_FriendList(pl);
+
 }
 
 // --- Network Callback ---
