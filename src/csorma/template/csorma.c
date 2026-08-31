@@ -55,6 +55,15 @@ csorma_s *csorma_str2_build(const char *b1)
 
 csorma_s *csorma_str_build(const char *b1, const uint32_t b1_len)
 {
+    // FIX: guard against NULL b1.
+    // memcpy(out->s, NULL, n) with n > 0 is undefined behavior and
+    // causes a segfault. Return NULL to indicate failure, matching
+    // the behavior of csorma_str2_build(NULL).
+    if (b1 == NULL)
+    {
+        return NULL;
+    }
+
     csorma_s *out = calloc(1, sizeof(csorma_s));
     out->s = calloc(1, b1_len + 1);
     if (out == NULL)
@@ -114,11 +123,21 @@ csorma_s *csorma_str_con(csorma_s *out, const char *b1, const uint32_t b1_len)
         out = calloc(1, sizeof(csorma_s));
     }
 
+    // FIX: guard against NULL b1.
+    // memcpy(dst, NULL, n) with n > 0 is undefined behavior and
+    // causes a segfault. If b1 is NULL there is nothing to append,
+    // so return the string unchanged.
+    if (b1 == NULL)
+    {
+        return out;
+    }
+
     out->s = realloc(out->s, out->l + b1_len + 1);
     if (out->s == NULL)
     {
         // HINT: what to do here?? FIX ME
-        CSORMA_LOGGER_ERROR("!! PANIC !!");
+        CSORMA_LOGGER_ERROR("!! PANIC !! realloc failed, returning original data !!");
+        return out;  /* original data preserved */
     }
     // HINT: set the "current" end position
     out->cur = out->s + out->l;
@@ -130,7 +149,7 @@ csorma_s *csorma_str_con(csorma_s *out, const char *b1, const uint32_t b1_len)
     // HINT: set the new length (this is without NULL terminator)
     out->l = out->l + b1_len;
     // HINT: set the new "current" end position
-    out->cur = out->cur + out->l;
+    out->cur = out->cur + b1_len;
     // HINT: we have a NULL terminator at the end of the new string
     out->n = 1;
     return out;
@@ -554,6 +573,11 @@ OrmaDatabase* OrmaDatabase_init(const uint8_t *directory_name, const uint32_t di
     }
     CSORMA_LOGGER_DEBUG("__sorma_global_last_inserted_rowid___mutex created");
 
+    // FIX: set a busy timeout so concurrent access retries instead of
+    // failing immediately with SQLITE_BUSY. Without this, any concurrent
+    // read/write on the same database file fails instantly.
+    sqlite3_busy_timeout(db, 3000); /* wait up to 3 seconds on lock */
+
     CSORMA_LOGGER_DEBUG("database created");
     o->db = db;
     CSORMA_LOGGER_DEBUG("o->db: %p db: %p", o->db, db);
@@ -788,9 +812,16 @@ const char *csorma_get_sqlcipher_version(void)
 #endif
 }
 
-
 static int rs_find_column_idx(sqlite3_stmt *res, const char *column_name)
 {
+    // FIX: guard against NULL column_name.
+    // strlen(NULL) is undefined behavior and would crash.
+    if (column_name == NULL)
+    {
+        CSORMA_LOGGER_DEBUG("column_name is NULL");
+        return -1;
+    }
+
     int result_colum_count = sqlite3_column_count(res);
     CSORMA_LOGGER_DEBUG("result_colum_count=%d", result_colum_count);
     for (int i=0;i<result_colum_count;i++)
@@ -799,7 +830,15 @@ static int rs_find_column_idx(sqlite3_stmt *res, const char *column_name)
         col_name = sqlite3_column_name(res, i);
         if (col_name != NULL)
         {
-            if (strncmp(col_name, column_name, strlen(column_name)) == 0)
+            // FIX: use strcmp for EXACT match instead of strncmp with
+            // strlen(column_name). The original code:
+            //   strncmp(col_name, column_name, strlen(column_name)) == 0
+            // was a PREFIX match, meaning searching for "id" would
+            // incorrectly match a column named "id_extra" because
+            // "id" is a prefix of "id_extra".
+            // strcmp compares the full length of both strings, so
+            // "id" will only match "id", not "id_extra".
+            if (strcmp(col_name, column_name) == 0)
             {
                 CSORMA_LOGGER_DEBUG("column found #%d %s", i, col_name);
                 return i;

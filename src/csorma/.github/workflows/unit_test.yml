@@ -1,0 +1,83 @@
+name: unit test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+
+  test_linux_unittests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: run unit tests
+        run: |
+          cd unit_test/
+          make test_all
+
+      - name: run unit asan tests
+        run: |
+          cd unit_test/
+          make asan_all
+
+  test_linux_unittests_screenshot:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: 
+        run: |
+
+      - name: install deps
+        run: |
+          sudo apt-get update && \
+          sudo DEBIAN_FRONTEND=noninteractive \
+          apt-get install -y --no-install-recommends \
+          fonts-freefont-otf \
+          ghostscript \
+          imagemagick
+
+      - name: run unit tests for screenshot
+        run: |
+          cd unit_test/
+          make test_all 2>&1 | tail -11 | tee out.txt || true
+
+      - name: make image of console output
+        run: |
+          cd unit_test/
+          echo "" >> out.txt
+          git rev-parse --short HEAD >> out.txt
+          echo "" >> out.txt
+          date '+%Y-%m-%d %H:%M:%S' >> out.txt
+          echo "" >> out.txt
+          cat out.txt | convert -trim -border 20 -bordercolor black +repage -background black -fill '#00cc00' -pointsize 14 TEXT:- ../unit_test_01_screen.png
+
+      - name: show image file name
+        run: |
+          ls -rattl
+
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.ref == 'refs/heads/master'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "unit_test_01_screen*.png"
+
+
+
+  test_macos14arm_unittests:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+      - name: run unit tests
+        run: |
+          cd unit_test/
+          make test_all
+

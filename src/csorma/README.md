@@ -310,8 +310,21 @@ OrmaDatabase_shutdown(o);
 sqlcipher source code is generated from latest [sqlcipher git repository](https://github.com/sqlcipher/sqlcipher) using this [tool](https://github.com/zoff99/gen_sqlcipher_amalgamation)<br>
 you can download the generated sqlcipher code from https://github.com/zoff99/gen_sqlcipher_amalgamation/releases/tag/nightly
 
+### Bugs found and fixed with AI assistance
+
+| # | Bug | Found By | Status |
+|---|-----|----------|--------|
+| 1 | `csorma_str_con` cur pointer arithmetic | `test_str_utils` | ✅ Fixed |
+| 2 | Logger NULL pointer crash | `test_logger` | ✅ Fixed |
+| 3 | `rs_find_column_idx` prefix matching | `test_column_lookup` | ✅ Fixed |
+| 4 | Missing `sqlite3_busy_timeout` | `test_busy` | ✅ Fixed |
+| 5 | `csorma_str_con(s, NULL, n>0)` crash | `test_str_con_null` | ✅ Fixed |
+| 6 | `csorma_str_build(NULL, n>0)` crash | `test_str_con_null` | ✅ Fixed |
+
 ### Automated Screenshots taken from CI
 <img src="https://github.com/zoff99/csorma/releases/download/nightly/console_01_screen-0.png" width="300">
+<br>
+<img src="https://github.com/zoff99/csorma/releases/download/nightly/unit_test_01_screen.png" height="300">
 <br>
 
 <br>
