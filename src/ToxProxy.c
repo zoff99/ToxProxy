@@ -75,6 +75,7 @@ Zoff sagt: wichtig: erste relay message am 20.08.2019 um 20:31 gesendet und rich
 
 #include "tox/tox.h"
 #include "tox/toxutil.h"
+#include "tox/mid_roster.h"
 
 #include "sql_tables/gen/csorma_runtime.h"
 
@@ -246,6 +247,8 @@ int notification_thread_stop = 1;
 int need_send_notification = 0;
 
 OrmaDatabase *o = NULL;
+
+MidState *g_mid_state = NULL;
 
 // functions defs ------------
 int ping_push_service();
@@ -493,10 +496,11 @@ void my_custom_schema_upgrade_callback(uint32_t old_version, uint32_t new_versio
         dbg(LOGLEVEL_INFO, "res1: %d", res1);
         }
 
-        /* done already above
-        /* done already above
-        /* done already above
+        /* done already above */
+        /* done already above */
+        /* done already above */
         // -- update 0001 --
+        /*
         {
         char *sql2 = "ALTER TABLE \"Friend\" ADD COLUMN last_update_timestamp INTEGER;";
         dbg(LOGLEVEL_INFO, "alter table: Friend");
@@ -510,10 +514,10 @@ void my_custom_schema_upgrade_callback(uint32_t old_version, uint32_t new_versio
         CSORMA_GENERIC_RESULT res1 = OrmaDatabase_run_multi_sql(o, (const uint8_t *)sql2);
         dbg(LOGLEVEL_INFO, "res1: %d", res1);
         }
-        // done already above
-        // done already above
-        // done already above
         */
+        // done already above
+        // done already above
+        // done already above
 
         // =================================================================================
         {
@@ -1386,7 +1390,9 @@ static void leave_old_groups(Tox *tox)
         if ((err1 == TOX_ERR_GROUP_STATE_QUERIES_OK) && (group_number != UINT32_MAX))
         {
             // leave old group
+            mid_announce_leave(g_mid_state, tox, group_number);
             tox_group_leave(tox, group_number, (const uint8_t *)"", 0, NULL);
+            mid_on_group_delete(g_mid_state, tox, group_number);
             dbg(LOGLEVEL_INFO, "leave old group: %s", (*pd)->groupid->s);
             updateToxSavedata(tox);
         }
@@ -2015,8 +2021,8 @@ void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *
         update_friend_timestamp_in_db(public_key_hex, tox_public_key_hex_size_without_null_termin, timestamp_now());
         dbg(LOGLEVEL_DEBUG, "added friend of my master (norequest) with pubkey: %s", public_key_hex);
         // Mark this friend as seen in the current sync session
-        db_mark_friend_as_seen(friend_pubkey_hex);
-        dbg(LOGLEVEL_DEBUG, "db_mark_friend_as_seen for friend: %s", friend_pubkey_hex);
+        db_mark_friend_as_seen(public_key_hex);
+        dbg(LOGLEVEL_DEBUG, "db_mark_friend_as_seen for friend: %s", public_key_hex);
 
     } else if (data[0] == CONTROL_PROXY_MESSAGE_TYPE_GROUP_ID_FOR_PROXY) {
         if (length != (TOX_GROUP_CHAT_ID_SIZE) + 1) {
@@ -2497,10 +2503,25 @@ static void group_invite_cb(Tox *tox, uint32_t friend_number, const uint8_t *inv
     }
 }
 
+static void group_custom_packet_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, const uint8_t *data, size_t length, void *UNUSED(user_data))
+{
+    mid_on_group_custom_packet(g_mid_state, tox, group_number, peer_id, data, length);
+}
+
+static void group_moderation_cb(Tox *tox, uint32_t group_number, uint32_t source_peer_id, uint32_t target_peer_id, Tox_Group_Mod_Event mod_type, void *UNUSED(user_data))
+{
+    bool we_were_kicked = mid_on_group_moderation(g_mid_state, tox, group_number, source_peer_id, target_peer_id, mod_type);
+    if (we_were_kicked) {
+        dbg(LOGLEVEL_WARN, "We were kicked from group %d. Middleware securely wiped state.", group_number);
+        // The middleware handles the wipe; you can clear local DB references here if needed.
+    }
+}
+
 static void group_peer_join_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, void *UNUSED(user_data))
 {
     dbg(LOGLEVEL_DEBUG, "Peer %d joined group %d", peer_id, group_number);
     updateToxSavedata(tox);
+    mid_on_group_peer_join(g_mid_state, tox, group_number, peer_id);
 }
 
 static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id, Tox_Group_Exit_Type exit_type,
@@ -2528,18 +2549,33 @@ static void group_peer_exit_cb(Tox *tox, uint32_t group_number, uint32_t peer_id
             break;
     }
     updateToxSavedata(tox);
+
+    mid_on_group_peer_exit(g_mid_state, tox, group_number, exit_type);
 }
 
 static void group_self_join_cb(Tox *tox, uint32_t group_number, void *UNUSED(user_data))
 {
     dbg(LOGLEVEL_DEBUG, "You joined group %d", group_number);
     updateToxSavedata(tox);
+
+    Tox_Err_Group_Self_Query err;
+    size_t name_len = tox_group_self_get_name_size(tox, group_number, &err);
+    uint8_t *name = NULL;
+    if (err == TOX_ERR_GROUP_SELF_QUERY_OK && name_len > 0) {
+        name = calloc(1, name_len);
+        if (name) {
+            tox_group_self_get_name(tox, group_number, name, &err);
+        }
+    }
+    mid_on_group_self_join(g_mid_state, tox, group_number, name ? name : (const uint8_t *)"", name_len);
+    if (name) free(name);
 }
 
 static void group_join_fail_cb(Tox *tox, uint32_t group_number, Tox_Group_Join_Fail fail_type, void *UNUSED(user_data))
 {
     dbg(LOGLEVEL_WARN, "Joining group %d failed. reason: %d", group_number, fail_type);
     updateToxSavedata(tox);
+    mid_on_group_delete(g_mid_state, tox, group_number); // Clean up middleware state
 }
 
 static void add_all_groups_to_db(const Tox *tox)
@@ -2594,7 +2630,7 @@ static void add_all_friends_to_db(const Tox *tox)
     free(friend_list);
 }
 
-static void all_groups_peer_name(const Tox *tox)
+static void all_groups_peer_name(Tox *tox)
 {
     size_t num_groups = tox_group_get_number_groups(tox);
     if (num_groups < 1)
@@ -2632,6 +2668,7 @@ static void all_groups_peer_name(const Tox *tox)
                     {
                         snprintf(new_peer_name, (max_len - 1), "%s %s", random_entry_0, random_entry_1);
                         tox_group_self_set_name(tox, gnum, (const uint8_t *)new_peer_name, strlen(new_peer_name), NULL);
+                        mid_self_set_name(g_mid_state, tox, gnum, (const uint8_t *)new_peer_name, strlen(new_peer_name));
                         dbg(LOGLEVEL_DEBUG, "gnum=%d new peername=%s", gnum, new_peer_name);
                         free(new_peer_name);
                     }
@@ -2736,7 +2773,9 @@ void db_process_old_sync_items(Tox *tox)
         if ((err1 == TOX_ERR_GROUP_STATE_QUERIES_OK) && (group_number != UINT32_MAX))
         {
             // leave old group
+            mid_announce_leave(g_mid_state, tox, group_number);
             tox_group_leave(tox, group_number, (const uint8_t *)"", 0, NULL);
+            mid_on_group_delete(g_mid_state, tox, group_number);
             dbg(LOGLEVEL_INFO, "leave old group: %s", (*pd)->groupid->s);
             updateToxSavedata(tox);
         }
@@ -2767,39 +2806,41 @@ void db_process_old_sync_items(Tox *tox)
         dbg(LOGLEVEL_INFO,"friend missed_sync_countSet: affected rows: %d", (int)affected_rows3);
     }
 
-    // Find friends that have missed >= 2 consecutive syncs
-    Friend *p = orma_selectFromFriend(o->db);
-    FriendList *pl = p->missed_sync_countGe(p, (int32_t)2)->is_masterEq(p, (int32_t)0)->orderBypubkeyAsc(p)->toList(p);
-    dbg(LOGLEVEL_INFO, "should leave old friend: pl->items=%lld", (long long)pl->items);
-    Friend **pd = pl->l;
-    for(int i=0;i<pl->items;i++)
     {
-        uint8_t public_key_bin[tox_public_key_size()];
-        H2B((*pd)->pubkey->s, public_key_bin);
-
-        Tox_Err_Friend_By_Public_Key err1;
-        uint32_t friend_number = tox_friend_by_public_key(tox, public_key_bin, &err1);
-
-        dbg(LOGLEVEL_INFO, "trying to leave old friend: %s res=%d fnum=%d", (*pd)->pubkey->s, (int)err1, (int)friend_number);
-
-        if ((err1 == TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK) && (friend_number != UINT32_MAX))
+        // Find friends that have missed >= 2 consecutive syncs
+        Friend *p = orma_selectFromFriend(o->db);
+        FriendList *pl = p->missed_sync_countGe(p, (int32_t)2)->is_masterEq(p, (int32_t)0)->orderBypubkeyAsc(p)->toList(p);
+        dbg(LOGLEVEL_INFO, "should leave old friend: pl->items=%lld", (long long)pl->items);
+        Friend **pd = pl->l;
+        for(int i=0;i<pl->items;i++)
         {
-            // leave old friend
-            tox_friend_delete(tox, friend_number, NULL);
-            dbg(LOGLEVEL_INFO, "leave old friend: %s", (*pd)->pubkey->s);
-            updateToxSavedata(tox);
-            check_if_master_is_friend_zero(tox);
-        }
+            uint8_t public_key_bin[tox_public_key_size()];
+            H2B((*pd)->pubkey->s, public_key_bin);
 
-        if ((*pd)->pubkey->l > 2) // sanity check, pubkey hex string should be at least 2 char long
-        {
-            Friend *f_del = orma_deleteFromFriend(o->db);
-            int64_t affected_rows2 = f_del->pubkeyEq(f_del, (*pd)->pubkey)->execute(f_del);
-            dbg(LOGLEVEL_INFO, "have deleted friend from db (affected rows): %d", (int)affected_rows2);
+            Tox_Err_Friend_By_Public_Key err1;
+            uint32_t friend_number = tox_friend_by_public_key(tox, public_key_bin, &err1);
+
+            dbg(LOGLEVEL_INFO, "trying to leave old friend: %s res=%d fnum=%d", (*pd)->pubkey->s, (int)err1, (int)friend_number);
+
+            if ((err1 == TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK) && (friend_number != UINT32_MAX))
+            {
+                // leave old friend
+                tox_friend_delete(tox, friend_number, NULL);
+                dbg(LOGLEVEL_INFO, "leave old friend: %s", (*pd)->pubkey->s);
+                updateToxSavedata(tox);
+                check_if_master_is_friend_zero(tox);
+            }
+
+            if ((*pd)->pubkey->l > 2) // sanity check, pubkey hex string should be at least 2 char long
+            {
+                Friend *f_del = orma_deleteFromFriend(o->db);
+                int64_t affected_rows2 = f_del->pubkeyEq(f_del, (*pd)->pubkey)->execute(f_del);
+                dbg(LOGLEVEL_INFO, "have deleted friend from db (affected rows): %d", (int)affected_rows2);
+            }
+            pd++;
         }
-        pd++;
+        orma_free_FriendList(pl);
     }
-    orma_free_FriendList(pl);
 
 }
 
@@ -2878,6 +2919,9 @@ int main(int argc, char *argv[])
     mkdir(save_dir, S_IRWXU);
 #endif
     create_db();
+
+    // Initialize Middleware
+    g_mid_state = mid_new(NULL, NULL, 0);
 
     use_tor = 0;
     int opt;
@@ -3144,6 +3188,8 @@ int main(int argc, char *argv[])
     tox_callback_group_peer_exit(tox, group_peer_exit_cb);
     tox_callback_group_self_join(tox, group_self_join_cb);
     tox_callback_group_join_fail(tox, group_join_fail_cb);
+    tox_callback_group_custom_packet(tox, group_custom_packet_cb);
+    tox_callback_group_moderation(tox, group_moderation_cb);
 
     updateToxSavedata(tox);
 
@@ -3174,6 +3220,7 @@ int main(int argc, char *argv[])
 
     while (1) {
         tox_iterate(tox, NULL);
+        mid_iterate(g_mid_state, tox);
         usleep_usec(tox_iteration_interval(tox) * 1000);
 
 
@@ -3231,6 +3278,7 @@ int main(int argc, char *argv[])
 
     while (tox_loop_running) {
         tox_iterate(tox, NULL);
+        mid_iterate(g_mid_state, tox);
         usleep_usec(tox_iteration_interval(tox) * 1000);
         // usleep_usec(50 * 1000);
 
@@ -3295,6 +3343,7 @@ int main(int argc, char *argv[])
     curl_global_cleanup();
 #endif
 
+    mid_free(g_mid_state);
     shutdown_db();
 
     if (logfile) {

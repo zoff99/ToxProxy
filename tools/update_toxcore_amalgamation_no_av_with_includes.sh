@@ -1,7 +1,8 @@
 #! /bin/sh
-url='https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/amalgamation/toxcore_amalgamation_no_toxav.c'
-url2='https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxcore/tox.h'
-url3='https://raw.githubusercontent.com/zoff99/c-toxcore/zoff99/zoxcore_local_fork/toxutil/toxutil.h'
+url='https://raw.githubusercontent.com/zoff99/c-toxcore/refs/heads/ngc_persistant_peerlist_AI_003/amalgamation/toxcore_amalgamation_no_toxav.c'
+url2='https://raw.githubusercontent.com/zoff99/c-toxcore/refs/heads/ngc_persistant_peerlist_AI_003/toxcore/tox.h'
+url3='https://raw.githubusercontent.com/zoff99/c-toxcore/refs/heads/ngc_persistant_peerlist_AI_003/toxutil/toxutil.h'
+url4='https://raw.githubusercontent.com/zoff99/c-toxcore/refs/heads/ngc_persistant_peerlist_AI_003/ngc_ppeerlist/mid_roster.h'
 
 _HOME2_=$(dirname $0)
 export _HOME2_
@@ -16,3 +17,4 @@ wget "$url" -O toxcore_amalgamation_no_toxav.c
 cd tox/
 wget "$url2" -O tox.h
 wget "$url3" -O toxutil.h
+wget "$url4" -O mid_roster.h
