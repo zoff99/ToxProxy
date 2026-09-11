@@ -76094,11 +76094,88 @@ static MidGroupState *mid_add_group(MidState *s, const uint8_t chat_id[TOX_GROUP
     return g;
 }
 
+static bool mid_evict_oldest_offline_active(MidGroupState *g)
+{
+    if (g == NULL || g->count == 0) {
+        return false;
+    }
+
+    size_t oldest = g->count;
+    uint64_t oldest_seen = 0;
+
+    for (size_t i = 0; i < g->count; i++) {
+        const MidPeerRecord *r = &g->records[i];
+
+        /* Only ACTIVE peers that are currently offline are evictable. */
+        if (r->status != MID_STATUS_ACTIVE ||
+            r->connection_status != TOX_CONNECTION_NONE) {
+            continue;
+        }
+
+        /* Never evict our own record. */
+        if (!mid_key_is_zero(g->self_identity_key) &&
+            mid_same_identity(r->identity_key, g->self_identity_key)) {
+            continue;
+        }
+
+        /* last_seen == 0 is treated as the oldest possible value. */
+        if (oldest == g->count || r->last_seen < oldest_seen) {
+            oldest = i;
+            oldest_seen = r->last_seen;
+        }
+    }
+
+    if (oldest == g->count) {
+        return false;
+    }
+
+    printf("[MID] evict_peer: evicting oldest offline ACTIVE peer %zu\n", oldest); fflush(stdout);
+
+    if (g->records[oldest].has_signature) {
+        printf("[MID] evict_peer: XOR OUT evicted peer. Old FP[0..3]=%02X%02X%02X%02X\n",
+               g->roster_fingerprint[0],
+               g->roster_fingerprint[1],
+               g->roster_fingerprint[2],
+               g->roster_fingerprint[3]);
+        fflush(stdout);
+
+        mid_xor_fingerprint(g->roster_fingerprint, g->records[oldest].identity_key);
+
+        printf("[MID] evict_peer: New FP[0..3]=%02X%02X%02X%02X\n",
+               g->roster_fingerprint[0],
+               g->roster_fingerprint[1],
+               g->roster_fingerprint[2],
+               g->roster_fingerprint[3]);
+        fflush(stdout);
+    }
+
+    for (size_t k = oldest; k + 1 < g->count; k++) {
+        g->records[k] = g->records[k + 1];
+    }
+
+    g->count--;
+
+    return true;
+}
+
 static bool mid_ensure_capacity(MidGroupState *g)
 {
-    if (g->count >= MID_MAX_PEERS_PER_GROUP) {
-        printf("[MID] ensure_capacity: rejected, peer limit %d reached\n", MID_MAX_PEERS_PER_GROUP); fflush(stdout);
+    if (g == NULL) {
         return false;
+    }
+
+    if (g->count >= MID_MAX_PEERS_PER_GROUP) {
+        printf("[MID] ensure_capacity: peer limit %d reached, trying eviction\n", MID_MAX_PEERS_PER_GROUP); fflush(stdout);
+
+        if (!mid_evict_oldest_offline_active(g)) {
+            printf("[MID] ensure_capacity: rejected, peer limit %d reached and no offline ACTIVE peer to evict\n", MID_MAX_PEERS_PER_GROUP); fflush(stdout);
+            return false;
+        }
+
+        if (g->count >= MID_MAX_PEERS_PER_GROUP) {
+            printf("[MID] ensure_capacity: still at peer limit after eviction\n"); fflush(stdout);
+            return false;
+        }
     }
 
     if (g->count < g->capacity) {
