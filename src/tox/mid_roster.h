@@ -36,7 +36,7 @@ after all other threads have stopped using the MidState.
 typedef struct MidState MidState;
 
 /* Hard limit for stored peers per group. */
-#define MID_MAX_PEERS_PER_GROUP 8192
+#define MID_MAX_PEERS_PER_GROUP 1024
 
 #define MID_PROTOCOL_VERSION    1
 

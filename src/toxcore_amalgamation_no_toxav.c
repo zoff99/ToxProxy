@@ -16095,7 +16095,7 @@ after all other threads have stopped using the MidState.
 typedef struct MidState MidState;
 
 /* Hard limit for stored peers per group. */
-#define MID_MAX_PEERS_PER_GROUP 8192
+#define MID_MAX_PEERS_PER_GROUP 1024
 
 #define MID_PROTOCOL_VERSION    1
 
@@ -75583,7 +75583,7 @@ For other peers we need:
 tox_group_peer_get_signing_public_key()      [patched]
 This key is used to verify signatures made by that peer.
 
-self_secret_key
+self_secret_signing_key
 This is the Ed25519 secret signing key for our own NGC group identity.
 It is obtained from the patched API:
 tox_group_self_get_signing_secret_key()
@@ -75710,7 +75710,7 @@ static const uint8_t MID_MAGIC[MID_MAGIC_BYTES_TOTAL] = {
 
 #define MID_SAVE_MAGIC       "MIDR"
 #define MID_SAVE_MAGIC_SIZE  4
-#define MID_SAVE_VERSION     2
+#define MID_SAVE_VERSION     3
 #define MID_MAX_GROUPS       1000
 
 #define MID_BUF_INIT_CAP 4096
@@ -75763,6 +75763,14 @@ back online can sync and receive cryptographic proof of the departure.
 */
 #define MID_TOMBSTONE_TTL_SEC (7 * 24 * 60 * 60)
 
+/*
+Time-To-Live for "Zombie" peers (offline ACTIVE peers who never sent a LEFT tombstone).
+30 days is safe because Toxcore's network timeout is much shorter, and our 5-minute
+heartbeats guarantee last_seen stays fresh for actually active peers.
+*/
+#define MID_STALE_PEER_TTL_SEC (30 * 24 * 60 * 60)
+
+
 typedef enum {
     MID_STATUS_ACTIVE = 0,
     MID_STATUS_LEFT   = 1
@@ -75793,7 +75801,7 @@ typedef struct {
     uint8_t chat_id[TOX_GROUP_CHAT_ID_SIZE];
     uint8_t self_identity_key[MID_IDENTITY_KEY_SIZE];
     uint8_t self_signing_key[MID_SIGNING_KEY_SIZE];
-    uint8_t self_secret_key[MID_SIGNING_SECRET_KEY_SIZE];
+    uint8_t self_secret_signing_key[MID_SIGNING_SECRET_KEY_SIZE];
     bool     have_keys;
     uint8_t  self_nickname[MID_MAX_NICK_SIZE];
     uint16_t self_nickname_len;
@@ -76282,7 +76290,7 @@ static bool mid_sign_record(MidGroupState *g, MidPeerRecord *r)
                              &sig_len,
                              body,
                              body_len,
-                             g->self_secret_key) != 0) {
+                             g->self_secret_signing_key) != 0) {
         printf("[MID] sign_record: crypto_sign_detached failed\n"); fflush(stdout);
         return false;
     }
@@ -76731,7 +76739,7 @@ static bool mid_send_heartbeat_record(MidState *s, MidGroupState *g, const Tox *
 
     uint8_t sig[MID_SIG_SIZE];
     unsigned long long sig_len = 0;
-    if (crypto_sign_detached(sig, &sig_len, body, o, g->self_secret_key) != 0) return false;
+    if (crypto_sign_detached(sig, &sig_len, body, o, g->self_secret_signing_key) != 0) return false;
 
     uint8_t packet[128];
     memcpy(packet, MID_MAGIC, MID_MAGIC_BYTES_TOTAL);
@@ -76998,7 +77006,7 @@ static bool mid_set_self_keys(MidGroupState *g,
 
     memcpy(g->self_identity_key, identity_key, MID_IDENTITY_KEY_SIZE);
     memcpy(g->self_signing_key, signing_key, MID_SIGNING_KEY_SIZE);
-    memcpy(g->self_secret_key, secret_key, MID_SIGNING_SECRET_KEY_SIZE);
+    memcpy(g->self_secret_signing_key, secret_key, MID_SIGNING_SECRET_KEY_SIZE);
     g->have_keys = true;
 
     printf("[MID] set_self_keys: keys set successfully\n"); fflush(stdout);
@@ -77007,18 +77015,20 @@ static bool mid_set_self_keys(MidGroupState *g,
 
 static bool mid_init_self_from_tox(MidGroupState *g, const Tox *tox)
 {
+    if (g == NULL || tox == NULL) {
+        return false;
+    }
+
     if (g->have_keys) {
         return true;
     }
 
     printf("[MID] init_self_from_tox: fetching keys from Toxcore\n"); fflush(stdout);
 
-    if (g == NULL || tox == NULL) {
+    uint32_t group_number = mid_chat_id_to_group_number(tox, g->chat_id);
+    if (group_number == UINT32_MAX) {
         return false;
     }
-
-    uint32_t group_number = mid_chat_id_to_group_number(tox, g->chat_id);
-    if (group_number == UINT32_MAX) return false;
 
     uint8_t identity[MID_IDENTITY_KEY_SIZE];
     uint8_t signing[MID_SIGNING_KEY_SIZE];
@@ -77030,7 +77040,45 @@ static bool mid_init_self_from_tox(MidGroupState *g, const Tox *tox)
         printf("[MID] init_self_from_tox: get_public_key failed\n"); fflush(stdout);
         return false;
     }
-    printf("[MID] init_self_from_tox: got identity key\n"); fflush(stdout);
+
+    printf("[MID] init_self_from_tox: got identity key\n");
+    fflush(stdout);
+
+    /*
+     * We now have the current Toxcore identity in the local variable
+     * "identity".
+     *
+     * g->self_identity_key may contain the public identity that was loaded
+     * from the middleware save file.
+     *
+     * This comparison must happen BEFORE mid_set_self_keys(), because
+     * mid_set_self_keys() will overwrite g->self_identity_key.
+     */
+    if (!mid_key_is_zero(g->self_identity_key) &&
+        !mid_same_identity(identity, g->self_identity_key)) {
+
+        printf("[MID] init_self_from_tox: Toxcore identity differs from saved middleware identity\n"); fflush(stdout);
+
+        /*
+         * Choose your policy here.
+         *
+         * Option 1: Strict mode.
+         *
+         * If the saved middleware state must belong to exactly the same
+         * identity that Toxcore currently has, fail here.
+         *
+         * return false;
+         *
+         *
+         * Option 2: Adopt the current Toxcore identity.
+         *
+         * Toxcore is the authority for the current group identity.
+         * Continue and let mid_set_self_keys() install the keys reported
+         * by Toxcore.
+         *
+         * This is usually the more robust choice.
+         */
+    }
 
     if (!tox_group_self_get_signing_public_key(tox, group_number, signing, &err)) {
         printf("[MID] init_self_from_tox: get_signing_public_key failed\n"); fflush(stdout);
@@ -77439,6 +77487,8 @@ static bool mid_on_custom_packet_group(MidState *s,
              * Do not mark the peer online.
              */
             r.connection_status = TOX_CONNECTION_NONE;
+            /* Anchor last_seen so we can purge them if they never come online */
+            if (r.last_seen == 0) r.last_seen = now;
         }
 
         if (mid_upsert_record(g, &r)) {
@@ -77775,6 +77825,8 @@ static bool mid_on_custom_packet_group(MidState *s,
                             r.role = role;
                         } else {
                             r.connection_status = TOX_CONNECTION_NONE;
+                            /* Anchor last_seen so we can purge them if they never come online */
+                            if (r.last_seen == 0) r.last_seen = now;
                         }
 
                         if (mid_upsert_record(g, &r)) {
@@ -77945,7 +77997,7 @@ static bool mid_on_group_delete_internal(MidState *s, const uint8_t chat_id[TOX_
 
     for (size_t i = 0; i < s->group_count; i++) {
         if (memcmp(s->groups[i].chat_id, chat_id, TOX_GROUP_CHAT_ID_SIZE) == 0) {
-            sodium_memzero(s->groups[i].self_secret_key, sizeof(s->groups[i].self_secret_key));
+            sodium_memzero(s->groups[i].self_secret_signing_key, sizeof(s->groups[i].self_secret_signing_key));
             free(s->groups[i].records);
             for (size_t j = i; j < s->group_count - 1; j++) {
                 s->groups[j] = s->groups[j+1];
@@ -78309,6 +78361,8 @@ static bool mid_load_from_disk(MidState *s, const char *path, const uint8_t *pas
         goto parse_fail;
     }
 
+    uint64_t load_time = (uint64_t)time(NULL);
+
     // Parse Body
     uint32_t group_count;
     if (!mid_reader_read_u32(&r, &group_count) || group_count > MID_MAX_GROUPS) goto parse_fail;
@@ -78322,8 +78376,21 @@ static bool mid_load_from_disk(MidState *s, const char *path, const uint8_t *pas
 
         if (!mid_reader_read(&r, g->self_identity_key, MID_IDENTITY_KEY_SIZE)) goto parse_fail;
         if (!mid_reader_read(&r, g->self_signing_key, MID_SIGNING_KEY_SIZE)) goto parse_fail;
-        if (!mid_reader_read(&r, g->self_secret_key, MID_SIGNING_SECRET_KEY_SIZE)) goto parse_fail;
-        g->have_keys = !mid_key_is_zero(g->self_identity_key);
+        /*
+         * NEVER load self_secret_signing_key from disk.
+         *
+         * The secret key is fetched from Toxcore once the group becomes
+         * active again via mid_init_self_from_tox().
+         */
+        sodium_memzero(g->self_secret_signing_key, sizeof(g->self_secret_signing_key));
+
+        /*
+         * We only have public keys at this point.
+         * We cannot sign anything until Toxcore gives us the secret signing key.
+         */
+        g->have_keys = false;
+        g->self_active = false;
+        g->announced = false;
 
         uint16_t nick_len;
         if (!mid_reader_read_u16(&r, &nick_len) || nick_len > MID_MAX_NICK_SIZE) goto parse_fail;
@@ -78366,7 +78433,16 @@ static bool mid_load_from_disk(MidState *s, const char *path, const uint8_t *pas
 
             if (!mid_reader_read_u32(&r, &role)) goto parse_fail;
             tmp_rec.role = (Tox_Group_Role)role;
+
+
             if (!mid_reader_read_u64(&r, &tmp_rec.last_seen)) goto parse_fail;
+            // Only anchor if the saved value was 0 (e.g. corrupted or legacy save).
+            // If you use this, and the app was closed for 31 days, offline peers
+            // WILL be purged immediately upon the first mid_iterate() call.
+            //
+            if (tmp_rec.last_seen == 0) {
+                tmp_rec.last_seen = load_time;
+            }
 
             if (mid_find_identity(g, tmp_rec.identity_key) >= 0) continue;
 
@@ -78378,14 +78454,6 @@ static bool mid_load_from_disk(MidState *s, const char *path, const uint8_t *pas
                 mid_xor_fingerprint(g->roster_fingerprint, p->identity_key);
             }
             g->count++;
-        }
-
-        if (g->have_keys) {
-            int idx = mid_find_identity(g, g->self_identity_key);
-            if (idx >= 0 && g->records[idx].status == MID_STATUS_ACTIVE) {
-                g->self_active = true;
-                g->announced = true;
-            }
         }
     }
 
@@ -78423,7 +78491,13 @@ bool mid_save(MidState *s, const uint8_t *passphrase, size_t passphrase_len) {
         mid_buf_append(&buf, g->chat_id, TOX_GROUP_CHAT_ID_SIZE);
         mid_buf_append(&buf, g->self_identity_key, MID_IDENTITY_KEY_SIZE);
         mid_buf_append(&buf, g->self_signing_key, MID_SIGNING_KEY_SIZE);
-        mid_buf_append(&buf, g->self_secret_key, MID_SIGNING_SECRET_KEY_SIZE);
+        /*
+         * NEVER save self_secret_signing_key.
+         *
+         * The Ed25519 signing secret key belongs to the NGC group identity
+         * and is owned by Toxcore. It must be re-obtained from Toxcore when
+         * the group is active again.
+         */
         mid_buf_append_u16(&buf, g->self_nickname_len);
         mid_buf_append(&buf, g->self_nickname, g->self_nickname_len);
         mid_buf_append_u32(&buf, (uint32_t)g->count);
@@ -78555,7 +78629,7 @@ void mid_free(MidState *s) {
     if (s == NULL) return;
 
     for (size_t i = 0; i < s->group_count; i++) {
-        sodium_memzero(s->groups[i].self_secret_key, sizeof(s->groups[i].self_secret_key));
+        sodium_memzero(s->groups[i].self_secret_signing_key, sizeof(s->groups[i].self_secret_signing_key));
         free(s->groups[i].records);
     }
     free(s->groups);
@@ -78781,15 +78855,33 @@ void mid_iterate(MidState *s, Tox *tox)
             }
         }
 
-        // 3. GRAVEYARD CLEANUP: Purge expired LEFT tombstones
-        uint64_t cutoff = (now > MID_TOMBSTONE_TTL_SEC) ? (now - MID_TOMBSTONE_TTL_SEC) : 0;
+        // 3. GRAVEYARD & STALE CLEANUP
+        uint64_t cutoff_tombstone = (now > MID_TOMBSTONE_TTL_SEC) ? (now - MID_TOMBSTONE_TTL_SEC) : 0;
+        uint64_t cutoff_stale = (now > MID_STALE_PEER_TTL_SEC) ? (now - MID_STALE_PEER_TTL_SEC) : 0;
+
         size_t j = 0;
         while (j < g->count) {
-            if (g->records[j].status == MID_STATUS_LEFT && g->records[j].timestamp < cutoff) {
-                printf("[MID] iterate: purging expired tombstone for peer %zu\n", j); fflush(stdout);
-                if (g->records[j].has_signature) {
-                    printf("[MID] iterate: XOR OUT expired tombstone. Old FP[0..3]=%02X%02X%02X%02X\n", g->roster_fingerprint[0], g->roster_fingerprint[1], g->roster_fingerprint[2], g->roster_fingerprint[3]); fflush(stdout);
-                    mid_xor_fingerprint(g->roster_fingerprint, g->records[j].identity_key);
+            bool purge = false;
+            const MidPeerRecord *rec = &g->records[j];
+
+            // A. Purge expired LEFT tombstones (7 days)
+            if (rec->status == MID_STATUS_LEFT && rec->timestamp < cutoff_tombstone) {
+                purge = true;
+            }
+            // B. Purge stale offline ACTIVE peers (30 days)
+            // Must be ACTIVE, offline, and last_seen is older than the stale cutoff.
+            else if (rec->status == MID_STATUS_ACTIVE &&
+                     rec->connection_status == TOX_CONNECTION_NONE &&
+                     rec->last_seen > 0 &&
+                     rec->last_seen < cutoff_stale) {
+                purge = true;
+            }
+
+            if (purge) {
+                printf("[MID] iterate: purging stale/expired peer %zu\n", j); fflush(stdout);
+                if (rec->has_signature) {
+                    printf("[MID] iterate: XOR OUT purged peer. Old FP[0..3]=%02X%02X%02X%02X\n", g->roster_fingerprint[0], g->roster_fingerprint[1], g->roster_fingerprint[2], g->roster_fingerprint[3]); fflush(stdout);
+                    mid_xor_fingerprint(g->roster_fingerprint, rec->identity_key);
                     printf("[MID] iterate: New FP[0..3]=%02X%02X%02X%02X\n", g->roster_fingerprint[0], g->roster_fingerprint[1], g->roster_fingerprint[2], g->roster_fingerprint[3]); fflush(stdout);
                 }
                 // Shift array down to delete
