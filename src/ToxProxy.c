@@ -92,6 +92,15 @@ extern "C" {
 # define UNUSED(x) x
 #endif
 
+#ifdef UNUSED_FUNCTION
+#elif defined(__GNUC__) || defined(__clang__)
+# define UNUSED_FUNCTION(x) __attribute__((__unused__)) x
+#elif defined(__LCLINT__)
+# define UNUSED_FUNCTION(x) /*@unused@*/ x
+#else
+# define UNUSED_FUNCTION(x) x
+#endif
+
 // -------- bin2upper_case_hex (the out "_B2UH_buf" will have a NULL terminator at the end) --------
 #define TO_UPPER_HEX_CHAR(val) ((val) < 10 ? (val) + '0' : (val) - 10 + 'A')
 #define TO_UPPER_HEX_STRING(buffer, hex_buffer, size) do { \
@@ -1371,7 +1380,7 @@ static void check_if_master_is_friend_zero(const Tox *tox)
     }
 }
 
-static void leave_old_groups(Tox *tox)
+static void UNUSED_FUNCTION(leave_old_groups)(Tox *tox)
 {
     Group *p = orma_selectFromGroup(o->db);
     GroupList *pl = p->last_update_timestampLt(p, ((int64_t)timestamp_now() - (STALE_TIME_SECS)))->orderBygroupidAsc(p)->toList(p);
@@ -1408,7 +1417,7 @@ static void leave_old_groups(Tox *tox)
 }
 
 
-static void leave_old_friends(Tox *tox)
+static void UNUSED_FUNCTION(leave_old_friends)(Tox *tox)
 {
     char master_public_key_hex[tox_public_key_size()*2 + 1];
     memset(master_public_key_hex, 0, tox_public_key_size()*2 + 1);
