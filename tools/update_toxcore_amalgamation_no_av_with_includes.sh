@@ -13,8 +13,8 @@ basedir="$_HOME_""/../"
 
 cd "$basedir"
 cd src/
-wget "$url" -O toxcore_amalgamation_no_toxav.c
+wget "$url" --no-cache -O toxcore_amalgamation_no_toxav.c
 cd tox/
-wget "$url2" -O tox.h
-wget "$url3" -O toxutil.h
-wget "$url4" -O mid_roster.h
+wget "$url2" --no-cache -O tox.h
+wget "$url3" --no-cache -O toxutil.h
+wget "$url4" --no-cache -O mid_roster.h
