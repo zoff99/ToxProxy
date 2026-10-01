@@ -4524,6 +4524,9 @@ extern "C" {
 /* Maximum size of a public announce. */
 #define GCA_PUBLIC_ANNOUNCE_MAX_SIZE (ENC_PUBLIC_KEY_SIZE + GCA_ANNOUNCE_MAX_SIZE)
 
+/* How long we save a peer's announce before we consider it stale and remove it. */
+#define GCA_ANNOUNCE_SAVE_TIMEOUT 60
+
 typedef struct GC_Announce GC_Announce;
 typedef struct GC_Peer_Announce GC_Peer_Announce;
 typedef struct GC_Announces GC_Announces;
@@ -16648,10 +16651,17 @@ The middleware will fetch keys, announce the client, and request the roster.
 void mid_on_group_self_join(MidState *s, Tox *tox, uint32_t group_number, const uint8_t *nickname, size_t nickname_len);
 
 /*
-Call this when the client leaves or deletes a group.
 The middleware will securely wipe keys and free the roster for this group.
+but this "legacy" function queries toxcore for the chat ID, so you must call this before toxcore deleted the group!
 */
 void mid_on_group_delete(MidState *s, Tox *tox, uint32_t group_number);
+
+/*
+Call this after the client deletes a group.
+The middleware will securely wipe keys and free the roster for this group.
+We need the chat ID here, since toxcore already has deleted the information for the group!
+*/
+void mid_on_group_chat_delete(MidState *s, const uint8_t chat_id[TOX_GROUP_CHAT_ID_SIZE]);
 
 /******************************************************************************
 Peer Event Hooks
@@ -23653,9 +23663,6 @@ void kill_gca(GC_Announces_List *announces_list)
     free(announces_list);
 }
 
-/* How long we save a peer's announce before we consider it stale and remove it. */
-#define GCA_ANNOUNCE_SAVE_TIMEOUT 30
-
 /* How often we run do_gca() */
 #define GCA_DO_GCA_TIMEOUT 1
 
@@ -27669,6 +27676,9 @@ uint32_t copy_chatlist(const Group_Chats *g_c, uint32_t *out_list, uint32_t list
 
 /* The value the topic lock is set to when the topic lock is enabled. */
 #define GC_TOPIC_LOCK_ENABLED 0
+
+/* Force refresh a DHT announcement for the group if we haven't refreshed after this interval */
+#define GC_MAX_SELF_ANNOUNCE_INTERVAL (60 * 60)
 
 static_assert(GCC_BUFFER_SIZE <= UINT16_MAX,
               "GCC_BUFFER_SIZE must be <= UINT16_MAX)");
@@ -34867,12 +34877,28 @@ static void do_gc_tcp(const GC_Session *c, GC_Chat *chat, void *userdata)
     }
 }
 
+/*
+ * Returns how often in seconds we refresh our group announcement to the DHT.
+ */
+#define SELF_GC_ANNOUNCE_TIMEOUT (GCA_ANNOUNCE_SAVE_TIMEOUT - 10)
+static uint16_t get_gc_self_announce_refresh_interval(const GC_Chat *chat)
+{
+    if (chat->numpeers <= 1) {
+        return SELF_GC_ANNOUNCE_TIMEOUT;
+    }
+
+    // Slightly randomize interval each call to ensure that the group doesn't get stuck
+    // with a bad case scenario where every or most peers in the group announce at the
+    // same time indefinitely.
+    const int rand_increment = random_u16(chat->rng) % 2 == 0 ? 5 : -5;
+    const uint16_t interval = chat->numpeers * SELF_GC_ANNOUNCE_TIMEOUT + rand_increment;
+    return min_u16(GC_MAX_SELF_ANNOUNCE_INTERVAL, interval);
+}
+
 /**
- * Updates our TCP and UDP connection status and flags a new announcement if our connection has
- * changed and we have either a UDP or TCP connection.
+ * Updates our TCP and UDP connection status and flags a new announcement if we need one.
  */
 #define GC_SELF_CONNECTION_CHECK_INTERVAL 5  // how often in seconds we should run this function
-#define GC_SELF_REFRESH_ANNOUNCE_INTERVAL (60 * 20)  // how often in seconds we force refresh our group announcement
 non_null()
 static void do_self_connection(const GC_Session *c, GC_Chat *chat)
 {
@@ -34882,13 +34908,14 @@ static void do_self_connection(const GC_Session *c, GC_Chat *chat)
 
     const unsigned int self_udp_status = ipport_self_copy(c->messenger->dht, &chat->self_ip_port);
     const bool udp_change = (chat->self_udp_status != self_udp_status) && (self_udp_status != SELF_UDP_STATUS_NONE);
+    const uint16_t refresh_interval = get_gc_self_announce_refresh_interval(chat);
 
     // We flag a group announce if our UDP status has changed since last run, or if our last announced TCP
     // relay is no longer valid. Additionally, we will always flag an announce in the specified interval
     // regardless of the prior conditions. Private groups are never announced.
     if (is_public_chat(chat) &&
             ((udp_change || !tcp_relay_is_valid(chat->tcp_conn, chat->announced_tcp_relay_pk))
-             || mono_time_is_timeout(chat->mono_time, chat->last_time_self_announce, GC_SELF_REFRESH_ANNOUNCE_INTERVAL))) {
+             || mono_time_is_timeout(chat->mono_time, chat->last_time_self_announce, refresh_interval))) {
         chat->update_self_announces = true;
     }
 
@@ -75174,6 +75201,7 @@ bool cmp_object_to_bin(cmp_ctx_t *ctx, const cmp_object_t *obj, void *data,
 #pragma GCC diagnostic ignored "-Wmissing-variable-declarations"
 
 #include <time.h>
+#include <pthread.h>
 
 
 
@@ -75233,7 +75261,8 @@ typedef struct global_msgv2_outgoing_ft_entry {
 } global_msgv2_outgoing_ft_entry;
 
 static uint16_t global_ts_ms = 0;
-static pthread_mutex_t mutex_tox_util[1];
+// FIX: Statically initialize the mutex to prevent TSAN "uninitialized/destroyed" warnings.
+static pthread_mutex_t mutex_tox_util = PTHREAD_MUTEX_INITIALIZER;
 
 // ------------ UTILS ------------
 
@@ -75321,15 +75350,15 @@ get_hex(char *buf, int buf_len, char *hex_, int hex_len, int num_col)
 
 static void tox_utils_list_init(tox_utils_List *l)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
     l->size = 0;
     l->head = NULL;
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 static void tox_utils_list_clear(tox_utils_List *l)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *head = l->head;
     tox_utils_Node *next_ = NULL;
@@ -75351,13 +75380,13 @@ static void tox_utils_list_clear(tox_utils_List *l)
     l->size = 0;
     l->head = NULL;
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 
 static void tox_utils_list_add(tox_utils_List *l, uint8_t *key, uint32_t key2, void *data)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *n = (tox_utils_Node *)calloc(1, sizeof(tox_utils_Node));
 
@@ -75374,19 +75403,19 @@ static void tox_utils_list_add(tox_utils_List *l, uint8_t *key, uint32_t key2, v
     l->head = n;
     l->size++;
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 static tox_utils_Node *tox_utils_list_get(tox_utils_List *l, uint8_t *key, uint32_t key2)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *head = l->head;
 
     while (head) {
         if (head->key2 == key2) {
             if (check_file_signature(head->key, key, TOX_PUBLIC_KEY_SIZE) == 0) {
-                pthread_mutex_unlock(mutex_tox_util);
+                pthread_mutex_unlock(&mutex_tox_util);
                 return head;
             }
         }
@@ -75394,7 +75423,7 @@ static tox_utils_Node *tox_utils_list_get(tox_utils_List *l, uint8_t *key, uint3
         head = head->next;
     }
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
     return NULL;
 }
 
@@ -75436,7 +75465,7 @@ static void tox_utils_list_remove_single_node(tox_utils_List *l, tox_utils_Node 
 
 static void tox_utils_list_remove(tox_utils_List *l, uint8_t *key, uint32_t key2)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *head = l->head;
     tox_utils_Node *prev_ = NULL;
@@ -75460,12 +75489,12 @@ static void tox_utils_list_remove(tox_utils_List *l, uint8_t *key, uint32_t key2
         head = next_;
     }
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 static void tox_utils_list_remove_2(tox_utils_List *l, uint8_t *key)
 {
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     tox_utils_Node *head = l->head;
     tox_utils_Node *prev_ = NULL;
@@ -75487,7 +75516,7 @@ static void tox_utils_list_remove_2(tox_utils_List *l, uint8_t *key)
         head = next_;
     }
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 }
 
 // ------------ UTILS ------------
@@ -75634,7 +75663,7 @@ static void tox_utils_housekeeping(Tox *tox)
 {
 #if 0
 
-    pthread_mutex_lock(mutex_tox_util);
+    pthread_mutex_lock(&mutex_tox_util);
 
     // cancel and clear old outgoing FTs ----------------
     tox_utils_List *l = &global_msgv2_outgoing_ft_list;
@@ -75722,7 +75751,7 @@ static void tox_utils_housekeeping(Tox *tox)
         head = next_;
     }
 
-    pthread_mutex_unlock(mutex_tox_util);
+    pthread_mutex_unlock(&mutex_tox_util);
 
     // cancel and clear old incoming FTs ----------------
 #endif
@@ -75833,15 +75862,7 @@ void tox_utils_callback_friend_read_receipt_message_v2(Tox *tox,
 
 Tox *tox_utils_new(const struct Tox_Options *options, TOX_ERR_NEW *error)
 {
-    if (pthread_mutex_init(mutex_tox_util, NULL) != 0) {
-        if (error) {
-            // TODO: find a better error code, use malloc error for now
-            *error = TOX_ERR_NEW_MALLOC;
-        }
-
-        return NULL;
-    }
-
+    // FIX: Mutex is now statically initialized, no need for pthread_mutex_init
     tox_utils_list_init(&global_friend_capability_list);
     tox_utils_list_init(&global_msgv2_incoming_ft_list);
     tox_utils_list_init(&global_msgv2_outgoing_ft_list);
@@ -75858,7 +75879,9 @@ void tox_utils_kill(Tox *tox)
 
     tox_kill(tox);
 
-    pthread_mutex_destroy(mutex_tox_util);
+    // FIX: Statically initialized mutexes do not require destruction.
+    // Removing pthread_mutex_destroy avoids TSAN "use of destroyed mutex" errors
+    // if toxcore fires stray callbacks during teardown.
 }
 
 bool tox_utils_friend_delete(Tox *tox, uint32_t friend_number, TOX_ERR_FRIEND_DELETE *error)
@@ -76971,13 +76994,6 @@ static const uint8_t MID_MAGIC[MID_MAGIC_BYTES_TOTAL] = {
  * making size-based traffic fingerprinting significantly harder.
  */
 #define MID_MAX_PACKET_PADDING  64
-
-/*
- * Maximum payload size BEFORE padding. Reserves room for the maximum padding
- * plus the 1-byte padding-length indicator so the final padded packet never
- * exceeds MID_MAX_PACKET_SIZE.
- */
-#define MID_MAX_PAYLOAD_SIZE (MID_MAX_PACKET_SIZE - MID_MAX_PACKET_PADDING - 1)
 
 #define MID_RECORD_STATUS_SIZE    sizeof(uint8_t)
 #define MID_RECORD_TIMESTAMP_SIZE sizeof(uint64_t)
@@ -80509,6 +80525,19 @@ void mid_on_group_delete(MidState *s, Tox *tox, uint32_t group_number)
     uint8_t chat_id[TOX_GROUP_CHAT_ID_SIZE];
     Tox_Err_Group_State_Queries err;
     if (!tox_group_get_chat_id(tox, group_number, chat_id, &err) || err != TOX_ERR_GROUP_STATE_QUERIES_OK) return;
+
+    mid_lock(s);
+    bool changed = mid_on_group_delete_internal(s, chat_id);
+    mid_peer_list_changed_cb cb = s->peer_list_changed_cb;
+    void *ud = s->peer_list_changed_user_data;
+    mid_unlock(s);
+
+    if (changed && cb) cb(chat_id, ud);
+}
+
+void mid_on_group_chat_delete(MidState *s, const uint8_t chat_id[TOX_GROUP_CHAT_ID_SIZE])
+{
+    if (!s || !chat_id) return;
 
     mid_lock(s);
     bool changed = mid_on_group_delete_internal(s, chat_id);
