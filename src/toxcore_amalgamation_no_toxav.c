@@ -18013,6 +18013,8 @@ bool create_extended_keypair(uint8_t *pk, uint8_t *sk)
 #ifdef VANILLA_NACL
     return false;
 #else
+    ESTIMATE_CPU_CYCLES(3000000); /* extended keypair generation (Ed25519 + Curve25519 conversion) is very expensive */
+
     /* create signature key pair */
     crypto_sign_keypair(pk + ENC_PUBLIC_KEY_SIZE, sk + ENC_SECRET_KEY_SIZE);
 
@@ -18201,6 +18203,7 @@ bool crypto_signature_create(uint8_t *signature, const uint8_t *message, uint64_
 #ifdef VANILLA_NACL
     return false;
 #else
+    ESTIMATE_CPU_CYCLES(500000 + message_length * 5); /* Ed25519 signature creation */
     return crypto_sign_detached(signature, nullptr, message, message_length, secret_key) == 0;
 #endif // VANILLA_NACL
 }
@@ -18211,6 +18214,7 @@ bool crypto_signature_verify(const uint8_t *signature, const uint8_t *message, u
 #ifdef VANILLA_NACL
     return false;
 #else
+    ESTIMATE_CPU_CYCLES(1000000 + message_length * 5); /* Ed25519 signature verification (2x scalar mults) */
     return crypto_sign_verify_detached(signature, message, message_length, public_key) == 0;
 #endif
 }
@@ -18228,6 +18232,7 @@ int32_t encrypt_precompute(const uint8_t *public_key, const uint8_t *secret_key,
     memcpy(shared_key, public_key, CRYPTO_SHARED_KEY_SIZE);
     return 0;
 #else
+    ESTIMATE_CPU_CYCLES(500000); /* ECDH scalar multiplication (Diffie-Hellman key derivation) is very expensive */
     return crypto_box_beforenm(shared_key, public_key, secret_key);
 #endif
 }
@@ -18239,7 +18244,7 @@ int32_t encrypt_data_symmetric(const uint8_t *shared_key, const uint8_t *nonce,
         return -1;
     }
 
-    ESTIMATE_CPU_CYCLES(10000 + length * 12);
+    ESTIMATE_CPU_CYCLES(10000 + length * 12); /* estimated cost of symmetric crypto encryption */
 
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     // Don't encrypt anything.
@@ -18294,7 +18299,7 @@ int32_t decrypt_data_symmetric(const uint8_t *shared_key, const uint8_t *nonce,
         return -1;
     }
 
-    ESTIMATE_CPU_CYCLES(10000 + length * 12);
+    ESTIMATE_CPU_CYCLES(10000 + length * 12); /* estimated cost of symmetric crypto decryption */
 
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     assert(length >= crypto_box_MACBYTES);
@@ -18454,6 +18459,7 @@ void crypto_hmac(uint8_t auth[CRYPTO_HMAC_SIZE], const uint8_t key[CRYPTO_HMAC_K
     memcpy(auth, key, 16);
     memcpy(auth + 16, data, length < 16 ? length : 16);
 #else
+    ESTIMATE_CPU_CYCLES(10000 + length * 5); /* HMAC generation */
     crypto_auth(auth, data, length, key);
 #endif
 }
@@ -18464,6 +18470,7 @@ bool crypto_hmac_verify(const uint8_t auth[CRYPTO_HMAC_SIZE], const uint8_t key[
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
     return memcmp(auth, key, 16) == 0 && memcmp(auth + 16, data, length < 16 ? length : 16) == 0;
 #else
+    ESTIMATE_CPU_CYCLES(15000 + length * 5); /* HMAC verification */
     return crypto_auth_verify(auth, data, length, key) == 0;
 #endif
 }
@@ -18474,6 +18481,7 @@ void crypto_sha256(uint8_t *hash, const uint8_t *data, size_t length)
     memset(hash, 0, CRYPTO_SHA256_SIZE);
     memcpy(hash, data, length < CRYPTO_SHA256_SIZE ? length : CRYPTO_SHA256_SIZE);
 #else
+    ESTIMATE_CPU_CYCLES(5000 + length * 5); /* SHA256 hashing */
     crypto_hash_sha256(hash, data, length);
 #endif
 }
@@ -18484,6 +18492,7 @@ void crypto_sha512(uint8_t *hash, const uint8_t *data, size_t length)
     memset(hash, 0, CRYPTO_SHA512_SIZE);
     memcpy(hash, data, length < CRYPTO_SHA512_SIZE ? length : CRYPTO_SHA512_SIZE);
 #else
+    ESTIMATE_CPU_CYCLES(5000 + length * 5); /* SHA512 hashing */
     crypto_hash_sha512(hash, data, length);
 #endif
 }
@@ -21330,6 +21339,8 @@ void do_dht(DHT *dht)
         dht_connect_after_load(dht);
     }
 
+    ESTIMATE_CPU_CYCLES(200000 + dht->num_friends * 20000); /* baseline DHT loop + cost per DHT friend */
+
     do_Close(dht);
     do_dht_friends(dht);
     do_NAT(dht);
@@ -22500,7 +22511,7 @@ non_null()
 static void dht_pk_callback(void *object, int32_t number, const uint8_t *dht_public_key, void *userdata)
 {
     Friend_Connections *const fr_c = (Friend_Connections *)object;
-    Friend_Conn *const friend_con = get_conn(fr_c, number);
+    Friend_Conn *friend_con = get_conn(fr_c, number);
 
     if (friend_con == nullptr) {
         return;
@@ -22517,6 +22528,14 @@ static void dht_pk_callback(void *object, int32_t number, const uint8_t *dht_pub
         crypto_kill(fr_c->net_crypto, friend_con->crypt_connection_id);
         friend_con->crypt_connection_id = -1;
         handle_status(object, number, false, userdata); /* Going offline. */
+
+        /* Re-fetch before dereferencing friend_con again below,
+         * since handle_status can realloc or free the conns array it points into. */
+        friend_con = get_conn(fr_c, number);
+
+        if (friend_con == nullptr) {
+            return;
+        }
     }
 
     friend_new_connection(fr_c, number);
@@ -23020,6 +23039,8 @@ static void lan_discovery(Friend_Connections *fr_c)
 void do_friend_connections(Friend_Connections *fr_c, void *userdata)
 {
     const uint64_t temp_time = mono_time_get(fr_c->mono_time);
+
+    ESTIMATE_CPU_CYCLES(fr_c->num_cons * 10000); /* estimated cost of iterating friend connections */
 
     for (uint32_t i = 0; i < fr_c->num_cons; ++i) {
         Friend_Conn *const friend_con = get_conn(fr_c, i);
@@ -33796,6 +33817,7 @@ bool handle_gc_lossless_helper(const GC_Session *c, GC_Chat *chat, uint32_t peer
 non_null(1, 2, 4) nullable(5, 9)
 static bool handle_gc_packet_fragment(const GC_Session *c, GC_Chat *chat, uint32_t peer_number, GC_Connection *gconn,
                                       const uint8_t *data, uint16_t length, uint8_t packet_type, uint64_t message_id,
+                                      const uint8_t *sender_pk,
                                       void *userdata)
 {
     if (gconn->last_chunk_id != 0 && message_id != gconn->last_chunk_id + 1) {
@@ -33810,6 +33832,14 @@ static bool handle_gc_packet_fragment(const GC_Session *c, GC_Chat *chat, uint32
                          message_id, userdata);
 
     if (frag_ret == -1) {
+        return false;
+    }
+
+    /* peer number can change from peer add operations in packet handlers */
+    peer_number = get_peer_number_of_enc_pk(chat, sender_pk, false);
+    gconn = get_gc_connection(chat, peer_number);
+
+    if (gconn == nullptr) {
         return false;
     }
 
@@ -33887,6 +33917,15 @@ static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const 
     const int lossless_ret = gcc_handle_received_message(chat->log, chat->mono_time, gconn, data, (uint16_t) len,
                              packet_type, message_id, direct_conn);
 
+    /* peer number can change from peer add operations in packet handlers */
+    peer_number = get_peer_number_of_enc_pk(chat, sender_pk, false);
+    gconn = get_gc_connection(chat, peer_number);
+
+    if (gconn == nullptr) {
+        free(data);
+        return false;
+    }
+
     if (packet_type == GP_INVITE_REQUEST && !gconn->handshaked) {  // Both peers sent request at same time
         free(data);
         return true;
@@ -33916,7 +33955,7 @@ static bool handle_gc_lossless_packet(const GC_Session *c, GC_Chat *chat, const 
     /* handle packet fragment */
     if (lossless_ret == 3) {
         const bool frag_ret = handle_gc_packet_fragment(c, chat, peer_number, gconn, data, (uint16_t)len, packet_type,
-                              message_id, userdata);
+                              message_id, sender_pk, userdata);
         free(data);
         return frag_ret;
     }
@@ -34998,7 +35037,7 @@ void do_gc(GC_Session *c, void *userdata)
             total_work += chat->numpeers * 50000;
         }
     }
-    ESTIMATE_CPU_CYCLES(total_work);
+    ESTIMATE_CPU_CYCLES(total_work); /* estimated cost of processing active group chats and peers */
 #endif
 
     for (uint32_t i = 0; i < c->chats_index; ++i) {
@@ -42479,6 +42518,8 @@ static void do_friends(Messenger *m, void *userdata)
 {
     const uint64_t temp_time = mono_time_get(m->mono_time);
 
+    ESTIMATE_CPU_CYCLES(m->numfriends * 10000); /* estimated cost of processing friends loop */
+
     for (uint32_t i = 0; i < m->numfriends; ++i) {
         if (m->friendlist[i].status == FRIEND_ADDED) {
             const int fr = send_friend_request_packet(m->fr_c, m->friendlist[i].friendcon_id, m->friendlist[i].friendrequest_nospam,
@@ -42655,8 +42696,7 @@ static void do_gc_onion_friends(const Messenger *m)
 {
     const uint16_t num_friends = onion_get_friend_count(m->onion_c);
 
-    /* Iterating the friend list is very cheap (just pointer math and memcmp) */
-    ESTIMATE_CPU_CYCLES(num_friends * 1000);
+    ESTIMATE_CPU_CYCLES(num_friends * 1000); /* estimated cost of iterating onion friends (just pointer math and memcmp) */
 
     for (uint16_t i = 0; i < num_friends; ++i) {
         Onion_Friend *onion_friend = onion_get_friend(m->onion_c, i);
@@ -42674,8 +42714,7 @@ static void do_gc_onion_friends(const Messenger *m)
         if (chat->update_self_announces) {
             self_announce_group(m, chat, onion_friend);
 
-            /* self_announce_group involves packing announce data and updating lists */
-            ESTIMATE_CPU_CYCLES(20000);
+            ESTIMATE_CPU_CYCLES(20000); /* estimated cost of packing announce data and updating lists */
         }
     }
 }
@@ -42900,6 +42939,8 @@ void do_messenger(Messenger *m, void *userdata)
             }
         }
     }
+
+    ESTIMATE_CPU_CYCLES(50000); /* baseline cost of messenger loop overhead */
 
 #ifdef DEBUG_DO_MESSENGER
         xttt12 = current_time_monotonic(m->mono_time);
@@ -46999,6 +47040,8 @@ static int udp_handle_packet(void *object, const IP_Port *source, const uint8_t 
  */
 #define SEND_QUEUE_RATIO 1.3
 
+static uint64_t net_crypto_last_sub10_log_time = 0;
+
 non_null()
 static void send_crypto_packets(Net_Crypto *c)
 {
@@ -47215,7 +47258,10 @@ static void send_crypto_packets(Net_Crypto *c)
                 }
             }
 
-            if (conn->packet_send_rate > CRYPTO_PACKET_MIN_RATE * 1.5) {
+            // Only force a short iteration interval if we ACTUALLY have data to send.
+            // If the queue is empty, holding a high budget shouldn't prevent the app from sleeping.
+            if ((conn->packet_send_rate > CRYPTO_PACKET_MIN_RATE * 1.5) &&
+                (num_packets_array(&conn->send_array) > 0)) {
                 total_send_rate += conn->packet_send_rate;
             }
         }
@@ -47233,6 +47279,40 @@ static void send_crypto_packets(Net_Crypto *c)
 
         if (c->current_sleep_time > sleep_time) {
             c->current_sleep_time = sleep_time + 1;
+
+#if 0
+            /* --- ADDED THROTTLED DEBUG LOGGING (WITH QUEUE PROOF) --- */
+            if (c->current_sleep_time < 10) {
+
+                if (temp_time - net_crypto_last_sub10_log_time >= 2000 || net_crypto_last_sub10_log_time == 0) {
+                    net_crypto_last_sub10_log_time = temp_time;
+
+                    LOGGER_DEBUG(c->log, "tox_iteration_interval DROPPED to %ums (total_send_rate=%.1f pkts/sec)",
+                                 c->current_sleep_time, total_send_rate);
+
+                    for (uint32_t dbg_i = 0; dbg_i < c->crypto_connections_length; ++dbg_i) {
+                        const Crypto_Connection *dbg_conn = get_crypto_connection(c, dbg_i);
+                        if ((dbg_conn != nullptr) && (dbg_conn->status == CRYPTO_CONN_ESTABLISHED) &&
+                            (dbg_conn->packet_send_rate > CRYPTO_PACKET_MIN_RATE * 1.5)) {
+
+                            bool direct_connected = false;
+                            crypto_connection_status(c, dbg_i, &direct_connected, nullptr);
+
+                            // THIS IS THE PROOF: Check the actual send queue
+                            uint32_t queue_size = num_packets_array(&dbg_conn->send_array);
+
+                            LOGGER_DEBUG(c->log, "  -> conn %u (%s) budget=%.1f pkts/sec | queue_size=%u (%s)",
+                                         dbg_i,
+                                         direct_connected ? "UDP_DIRECT" : "TCP_RELAY",
+                                         dbg_conn->packet_send_rate,
+                                         queue_size,
+                                         queue_size > 0 ? "ACTUALLY SENDING" : "IDLE (just probing/holding budget)");
+                        }
+                    }
+                }
+            }
+            /* ------------------------------------------------------- */
+#endif
         }
     }
 
@@ -47797,7 +47877,7 @@ void do_net_crypto(Net_Crypto *c, void *userdata)
             active_conns++;
         }
     }
-    ESTIMATE_CPU_CYCLES(100000 + active_conns * 80000);
+    ESTIMATE_CPU_CYCLES(100000 + active_conns * 80000); /* estimated cost of managing active crypto connections */
 #endif
 
     kill_timedout(c, userdata);
@@ -55609,6 +55689,8 @@ void do_TCP_connection(const Logger *logger, const Mono_Time *mono_time,
         return;
     }
 
+    ESTIMATE_CPU_CYCLES(50000); /* baseline cost of TCP client connection loop */
+
     if (tcp_connection->status == TCP_CLIENT_PROXY_HTTP_CONNECTING) {
         if (send_pending_data(logger, &tcp_connection->con) == 0) {
             const int ret = proxy_http_read_connection_response(logger, tcp_connection);
@@ -59165,6 +59247,8 @@ static void do_TCP_epoll(TCP_Server *tcp_server, const Mono_Time *mono_time)
 
 void do_TCP_server(TCP_Server *tcp_server, const Mono_Time *mono_time)
 {
+    ESTIMATE_CPU_CYCLES(50000); /* baseline cost of TCP server loop */
+
 #ifdef TCP_SERVER_USE_EPOLL
     do_TCP_epoll(tcp_server, mono_time);
 
