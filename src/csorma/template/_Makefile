@@ -10,7 +10,7 @@ ismingw = 0
 ccmachine = $(shell $(CC) -dumpmachine)
 ifeq ($(findstring mingw, $(ccmachine)), mingw)
   ismingw = 1
-  CFLAGS += --static
+  CFLAGS += --static -D_WIN32_WINNT=0x0601
 endif
 
 ASANCFLAGS = -fsanitize=address -fno-omit-frame-pointer -static-libasan
