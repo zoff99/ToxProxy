@@ -455,8 +455,8 @@ jobs:
           cd project/gen/
           ./csorma_test && ./csorma_example
 
-  test_macos14arm:
-    runs-on: macos-14
+  test_macos15arm:
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
 
