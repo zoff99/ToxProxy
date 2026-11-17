@@ -72,8 +72,8 @@ jobs:
 
 
 
-  test_macos14arm_unittests:
-    runs-on: macos-14
+  test_macos15arm_unittests:
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
       - name: run unit tests
