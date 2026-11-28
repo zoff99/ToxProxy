@@ -49,7 +49,7 @@ ls -al windows_ub20/artefacts/ToxProxy.exe
 # copy ToxProxy.exe to your windows machine
 ```
 
-#### 🚀 Featured Applications
+##### 🚀 Featured Applications
 
 Join a growing community of security-conscious people. Check out these featured applications:
 
